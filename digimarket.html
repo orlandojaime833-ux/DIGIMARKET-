@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIGIMarket — Plataforma de E-commerce TON</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0f;--surface:#12121a;--card:#1a1a26;--border:#2a2a3e;
+  --text:#f0f0f8;--muted:#8888aa;--accent:#7c6dfa;--accent2:#4ecdc4;
+  --gold:#f4c542;--danger:#ff5c5c;--success:#4ecdc4;
+}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh}
+.app{display:flex;flex-direction:column;min-height:100vh}
+nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:4px;height:56px;position:sticky;top:0;z-index:100}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:18px;letter-spacing:-0.5px;cursor:pointer;padding:6px 12px;border-radius:6px}
+.logo span{color:var(--accent)}
+.nav-btn{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:6px 12px;border-radius:6px;font-family:'DM Sans',sans-serif;transition:all .15s}
+.nav-btn:hover,.nav-btn.active{color:var(--text);background:var(--card)}
+.nav-r{margin-left:auto;display:flex;gap:8px}
+.page{flex:1;padding:24px;max-width:1100px;margin:0 auto;width:100%}
+h1{font-family:'Syne',sans-serif;font-weight:700;font-size:26px;margin-bottom:6px}
+.sub{color:var(--muted);font-size:14px;margin-bottom:24px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.g4p{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.badge{display:inline-flex;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500}
+.ba{background:rgba(78,205,196,.15);color:#4ecdc4;border:1px solid rgba(78,205,196,.3)}
+.bi{background:rgba(255,92,92,.12);color:#ff5c5c;border:1px solid rgba(255,92,92,.3)}
+.bp{background:rgba(124,109,250,.15);color:#a89cf7;border:1px solid rgba(124,109,250,.3)}
+.bg{background:rgba(244,197,66,.12);color:#f4c542;border:1px solid rgba(244,197,66,.3)}
+.btn{padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;transition:all .15s}
+.btn-p{background:var(--accent);color:#fff}
+.btn-p:hover{background:#6a5ce8}
+.btn-g{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-g:hover{background:var(--card)}
+.btn-d{background:rgba(255,92,92,.12);color:#ff5c5c;border:1px solid rgba(255,92,92,.3)}
+.btn-s{padding:5px 12px;font-size:12px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+.sl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+.sv{font-family:'Syne',sans-serif;font-weight:700;font-size:26px}
+.ss{font-size:12px;color:var(--muted);margin-top:3px}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 12px;color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+td{padding:10px 12px;border-bottom:1px solid rgba(42,42,62,.5)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+input,select{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;width:100%}
+input:focus,select:focus{border-color:var(--accent)}
+.lbl{font-size:12px;color:var(--muted);margin-bottom:5px}
+.fr{margin-bottom:14px}
+.row{display:flex;gap:12px;align-items:center}
+.f1{flex:1}
+.plan-card{border-radius:12px;padding:20px;position:relative;cursor:pointer;transition:transform .2s;border:1px solid var(--border)}
+.plan-card:hover{transform:translateY(-2px)}
+.pc-free{background:linear-gradient(135deg,#1a1a26,#1e1e2e)}
+.pc-std{background:linear-gradient(135deg,#1a1a2e,#1e1e38);border-color:rgba(124,109,250,.3)}
+.pc-pro{background:linear-gradient(135deg,#1a2030,#1e2a40);border-color:rgba(78,205,196,.3)}
+.pc-biz{background:linear-gradient(135deg,#201a10,#2a2010);border-color:rgba(244,197,66,.4)}
+.pn{font-family:'Syne',sans-serif;font-weight:700;font-size:16px;margin-bottom:4px}
+.pp{font-family:'Syne',sans-serif;font-weight:800;font-size:28px;margin:10px 0}
+.pt{font-size:13px;color:var(--muted)}
+.pf{font-size:12px;color:var(--muted);padding:3px 0;display:flex;gap:6px}
+.pf::before{content:'✓';color:var(--success);flex-shrink:0;font-size:11px;margin-top:1px}
+.pf.lk{color:rgba(136,136,170,.4)}
+.pf.lk::before{content:'×';color:rgba(255,92,92,.4)}
+.pop{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:10px;font-weight:600;padding:3px 12px;border-radius:20px;white-space:nowrap}
+.pb{background:var(--border);border-radius:4px;height:5px;overflow:hidden;margin-top:6px}
+.pf2{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s}
+.sp{background:var(--surface);border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+.sb{height:90px;background:linear-gradient(135deg,#2a1a4e,#1a3040);display:flex;align-items:center;padding:0 20px;gap:12px}
+.slc{width:48px;height:48px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:18px;flex-shrink:0}
+.pg{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px}
+.pc{background:var(--card);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.pi{height:70px;background:linear-gradient(135deg,#2a2a3e,#1e1e2e);display:flex;align-items:center;justify-content:center;font-size:24px}
+.pci{padding:10px}
+.pcn{font-size:12px;font-weight:500;margin-bottom:3px}
+.pcp{font-size:13px;color:var(--accent2);font-weight:600}
+.pcb{width:100%;margin-top:8px;padding:6px;background:var(--accent);border:none;border-radius:5px;color:#fff;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.st{font-family:'Syne',sans-serif;font-weight:600;font-size:15px}
+.ab{display:flex;flex-direction:column;gap:8px}
+.ar{display:flex;align-items:center;gap:10px;font-size:13px}
+.al{min-width:70px;color:var(--muted);font-size:12px}
+.at{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.af{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.av{min-width:40px;text-align:right;font-size:12px;color:var(--muted)}
+.alert{padding:12px 14px;border-radius:8px;font-size:13px;display:flex;align-items:flex-start;gap:10px}
+.ai{background:rgba(124,109,250,.1);border:1px solid rgba(124,109,250,.3);color:#c4baff}
+.aw{background:rgba(244,197,66,.08);border:1px solid rgba(244,197,66,.25);color:#e8c060}
+.ao{background:rgba(78,205,196,.08);border:1px solid rgba(78,205,196,.25);color:#4ecdc4}
+.tabs{display:flex;gap:2px;background:var(--surface);border-radius:9px;padding:3px;margin-bottom:20px;border:1px solid var(--border)}
+.tab{flex:1;padding:7px;border:none;background:none;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12px;border-radius:7px;cursor:pointer;transition:all .15s;font-weight:500}
+.tab.active{background:var(--card);color:var(--text)}
+.div{height:1px;background:var(--border);margin:16px 0}
+.tc{background:rgba(78,205,196,.06);border:1px solid rgba(78,205,196,.2);border-radius:10px;padding:16px;display:flex;align-items:center;gap:12px}
+.ti{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#0088cc,#4ecdc4);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;flex-shrink:0}
+.tag{display:inline-flex;padding:2px 8px;background:var(--border);border-radius:4px;font-size:11px;color:var(--muted)}
+.dl{display:flex;align-items:center;gap:20px}
+.dleg{display:flex;flex-direction:column;gap:7px}
+.di{display:flex;align-items:center;gap:8px;font-size:12px}
+.dd{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="app">
+<nav>
+  <div class="logo" onclick="goTo('landing')">DIGI<span>Market</span></div>
+  <button class="nav-btn" id="nb-plans" onclick="goTo('plans')">Planos</button>
+  <button class="nav-btn" id="nb-dashboard" onclick="goTo('dashboard')">Dashboard</button>
+  <button class="nav-btn" id="nb-store" onclick="goTo('store')">Loja Demo</button>
+  <button class="nav-btn" id="nb-admin" onclick="goTo('admin')">ADM Master</button>
+  <div class="nav-r">
+    <button class="btn btn-g btn-s" onclick="goTo('login')">Entrar</button>
+    <button class="btn btn-p btn-s" onclick="goTo('plans')">Criar Loja</button>
+  </div>
+</nav>
+<div id="ct" style="flex:1"></div>
+</div>
+
+<script>
+const ADMINS=['orlandojaime833@gmail.com','orlandojaime800@gmail.com'];
+const PLANS=[
+  {id:'free',name:'Free',price:0,ton:0,c:'#8888aa',prods:5,imgs:1,
+   feat:['5 produtos','1 imagem/produto','Sub-loja básica','Marca DIGIMarket visível'],
+   lock:['Banner personalizado','Analytics','Redes sociais','Suporte chat','Domínio próprio','Sem marca DIGIMarket']},
+  {id:'standard',name:'Standard',price:9,ton:2.5,c:'#7c6dfa',prods:30,imgs:3,pop:true,
+   feat:['30 produtos','3 imagens/produto','Banner personalizado','Sub-loja premium'],
+   lock:['Analytics avançado','Redes sociais','Suporte chat','Domínio próprio','Sem marca DIGIMarket']},
+  {id:'pro',name:'Pro',price:25,ton:7,c:'#4ecdc4',prods:100,imgs:5,
+   feat:['100 produtos','5 imagens/produto','Banner personalizado','Analytics','Redes sociais','Suporte chat','Domínio personalizado'],
+   lock:['Sem marca DIGIMarket']},
+  {id:'business',name:'Business',price:60,ton:16.5,c:'#f4c542',prods:9999,imgs:10,
+   feat:['Produtos ilimitados','10 imagens/produto','Banner personalizado','Analytics avançado','Redes sociais','Suporte prioritário','Domínio personalizado','Sem marca DIGIMarket'],
+   lock:[]}
+];
+const STORES=[
+  {id:1,email:'joao@mail.com',plan:'Pro',sub:'2025-03-01',exp:'2025-04-01',status:'active',rev:2.3},
+  {id:2,email:'maria@shop.co',plan:'Standard',sub:'2025-03-10',exp:'2025-04-10',status:'active',rev:0.8},
+  {id:3,email:'tech@biz.io',plan:'Business',sub:'2025-02-15',exp:'2025-03-15',status:'inactive',rev:5.1},
+  {id:4,email:'loja@free.com',plan:'Free',sub:'2025-03-20',exp:null,status:'active',rev:0},
+  {id:5,email:'shop@pro.net',plan:'Pro',sub:'2025-03-05',exp:'2025-04-05',status:'active',rev:3.7},
+];
+const PRODS=[
+  {id:1,name:'Headphones BT Pro',price:45,img:'🎧',desc:'Som premium sem fios'},
+  {id:2,name:'Smart Watch X1',price:120,img:'⌚',desc:'Saúde e produtividade'},
+  {id:3,name:'Power Bank 20k',price:28,img:'🔋',desc:'Carregamento rápido'},
+  {id:4,name:'Câmara 4K Mini',price:89,img:'📷',desc:'Vídeo em 4K ultra-HD'},
+  {id:5,name:'Speaker Portátil',price:35,img:'🔊',desc:'Resistente à água IPX7'},
+  {id:6,name:'Cabo USB-C Mag.',price:12,img:'🔌',desc:'Carregamento 100W'},
+];
+
+let page='landing',email='',isAdm=false,selPlan=null,step=0,dtab='overview',atab='users',sf='all';
+
+function goTo(p){
+  page=p;
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  const m={plans:'nb-plans',dashboard:'nb-dashboard',store:'nb-store',admin:'nb-admin'};
+  if(m[p]) document.getElementById(m[p])?.classList.add('active');
+  render();
+}
+
+function render(){
+  const c=document.getElementById('ct');
+  const fns={landing:rLanding,plans:rPlans,dashboard:rDash,store:rStore,admin:rAdmin,login:rLogin,checkout:rCheckout};
+  c.innerHTML=(fns[page]||rLanding)();
+}
+
+function rLanding(){return`<div class="page">
+<div style="text-align:center;padding:48px 0 32px">
+  <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:46px;letter-spacing:-1px;line-height:1.1;margin-bottom:14px">
+    Cria a tua loja online<br><span style="color:var(--accent)">em minutos</span>
+  </div>
+  <p style="color:var(--muted);font-size:16px;max-width:460px;margin:0 auto 28px;line-height:1.7">Plataforma de e-commerce com pagamentos em <strong style="color:var(--accent2)">TON</strong>. Sem complicações, sem fronteiras.</p>
+  <div style="display:flex;gap:12px;justify-content:center">
+    <button class="btn btn-p" style="padding:12px 28px;font-size:15px" onclick="goTo('plans')">Começar Agora</button>
+    <button class="btn btn-g" style="padding:12px 28px;font-size:15px" onclick="goTo('store')">Ver Demo</button>
+  </div>
+</div>
+<div class="g4" style="margin-bottom:32px">
+  ${[['Lojistas Activos','247','+18 este mês'],['Receita Total','1,842 TON','≈ $9,210'],['Lojas Online','247','Em 5 países'],['Uptime','99.9%','SLA garantido']].map(([l,v,s])=>`<div class="stat"><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${s}</div></div>`).join('')}
+</div>
+<div class="g3" style="margin-bottom:24px">
+  ${[['⚡','Activação Imediata','Paga em TON e a loja activa automaticamente após confirmação na blockchain.'],['🛒','Gestão Simples','Adiciona produtos, imagens e preços. O teu painel numa só página.'],['🌐','Sub-loja Única','Cada lojista recebe URL própria: digimarket.com/s/nome-loja']].map(([i,t,d])=>`
+  <div class="card"><div style="font-size:28px;margin-bottom:10px">${i}</div><div style="font-family:'Syne',sans-serif;font-weight:600;font-size:14px;margin-bottom:6px">${t}</div><div style="font-size:13px;color:var(--muted);line-height:1.6">${d}</div></div>`).join('')}
+</div>
+<div class="alert ai">
+  <span>ℹ</span><span>Pagamentos via <strong>TON Connect</strong> · API Key: <code style="font-size:11px;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:3px">2b95ea2ad1f9a2d53563a05d4</code> — sem intervenção manual do utilizador.</span>
+</div>
+<div style="text-align:center;margin-top:24px">
+  <button class="btn btn-g btn-s" onclick="goTo('login')">Já tens conta? Entrar →</button>
+</div>
+</div>`;}
+
+function rPlans(){return`<div class="page">
+<h1>Escolhe o teu Plano</h1>
+<div class="sub">Todos os planos incluem sub-loja automática. Paga em TON, activa instantaneamente.</div>
+<div class="g4p" style="margin-bottom:24px">
+  ${PLANS.map(p=>`
+  <div class="plan-card pc-${p.id}">
+    ${p.pop?'<div class="pop">MAIS POPULAR</div>':''}
+    <div class="pn" style="color:${p.c}">${p.name}</div>
+    <div class="pp" style="color:${p.c}">${p.price===0?'Grátis':'$'+p.price}<span style="font-size:14px;font-weight:400;color:var(--muted)">${p.price>0?'/mês':''}</span></div>
+    <div class="pt">${p.ton>0?p.ton+' TON/mês':'Sem custo'}</div>
+    <div class="div"></div>
+    ${p.feat.map(f=>`<div class="pf">${f}</div>`).join('')}
+    ${p.lock.map(f=>`<div class="pf lk">${f}</div>`).join('')}
+    <button class="btn btn-p" style="width:100%;margin-top:14px;background:${p.ton>0?p.c:'var(--border)'};color:${p.ton>0?'#000':'var(--muted)'}" onclick="selPlan='${p.id}';step=0;goTo('checkout')">
+      ${p.ton>0?'Subscrever — '+p.ton+' TON':'Começar Grátis'}
+    </button>
+  </div>`).join('')}
+</div>
+<div class="alert ao"><span>✓</span><span>Plano activado apenas após confirmação na blockchain TON. Renovação mensal.</span></div>
+</div>`;}
+
+function rCheckout(){
+  const p=PLANS.find(x=>x.id===selPlan)||PLANS[1];
+  const steps=['Ligar Carteira','Confirmar','Aguardar Blockchain','Loja Activa'];
+  return`<div class="page" style="max-width:520px">
+<button class="btn btn-g btn-s" onclick="goTo('plans')" style="margin-bottom:16px">← Voltar</button>
+<h1>Checkout — Plano ${p.name}</h1>
+<div class="sub">Pagamento seguro via TON Connect</div>
+<div class="card" style="margin-bottom:16px">
+  ${[['Plano',p.name],['Duração','1 mês'],['Valor USD','$'+p.price],['—','—']].filter((_,i)=>i<3).map(([l,v])=>`<div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:13px"><span style="color:var(--muted)">${l}</span><span>${v}</span></div>`).join('')}
+  <div class="div"></div>
+  <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:600">
+    <span>Total em TON</span><span style="color:var(--accent2)">${p.ton} TON</span>
+  </div>
+</div>
+<div class="card" style="margin-bottom:16px">
+  <div class="st" style="margin-bottom:14px">Processo TON Connect</div>
+  <div style="display:flex;margin-bottom:16px">
+    ${steps.map((s,i)=>`
+    <div style="flex:1;text-align:center">
+      <div style="width:28px;height:28px;border-radius:50%;background:${i<=step?'var(--accent)':'var(--border)'};margin:0 auto 5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff;transition:all .3s">${i<step?'✓':i+1}</div>
+      <div style="font-size:10px;color:${i<=step?'var(--text)':'var(--muted)'};line-height:1.3">${s}</div>
+    </div>
+    ${i<3?`<div style="flex:0 0 16px;display:flex;align-items:flex-start;padding-top:14px"><div style="height:1px;width:100%;background:${i<step?'var(--accent)':'var(--border)'}"></div></div>`:''}`).join('')}
+  </div>
+  ${step===0?`
+  <div class="tc">
+    <div class="ti">TC</div>
+    <div style="flex:1">
+      <div style="font-size:13px;font-weight:500">TON Connect pronto</div>
+      <div style="font-size:11px;color:var(--muted)">API Key: 2b95ea...05d4 · SDK inicializado</div>
+    </div>
+    <button class="btn btn-p btn-s" onclick="step++;render()">Ligar Carteira</button>
+  </div>`:step===1?`
+  <div class="alert ai" style="margin-bottom:12px">SDK calcula e envia ${p.ton} TON automaticamente — sem valores manuais.</div>
+  <button class="btn btn-p" style="width:100%" onclick="step++;render()">Confirmar ${p.ton} TON</button>
+  `:step===2?`
+  <div style="text-align:center;padding:12px 0">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">A aguardar confirmação na blockchain TON...</div>
+    <div class="pb"><div class="pf2" id="pf" style="width:0%"></div></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">Monitorização activa — normalmente &lt;30s</div>
+  </div>
+  <script>let pw=0;const pi=setInterval(()=>{pw=Math.min(pw+7,100);const el=document.getElementById('pf');if(el)el.style.width=pw+'%';if(pw>=100){clearInterval(pi);setTimeout(()=>{step=3;render()},400)}},200);<\/script>
+  `:`
+  <div class="alert ao" style="margin-bottom:12px">✓ Transacção confirmada! Sub-loja gerada com sucesso.</div>
+  <div style="font-size:13px;color:var(--muted);margin-bottom:14px">URL: <code style="color:var(--accent2)">digimarket.com/s/a-minha-loja</code></div>
+  <button class="btn btn-p" style="width:100%" onclick="goTo('dashboard')">Ir para o Dashboard →</button>
+  `}
+</div>
+</div>`;}
+
+function rLogin(){return`<div class="page" style="max-width:400px;padding-top:48px">
+<h1 style="text-align:center;margin-bottom:4px">Entrar</h1>
+<div class="sub" style="text-align:center;margin-bottom:24px">Dashboard do lojista ou painel ADM</div>
+<div class="card">
+  <div class="fr"><div class="lbl">E-mail</div><input id="le" type="email" placeholder="o-teu@email.com"></div>
+  <div class="fr"><div class="lbl">Password</div><input id="lp" type="password" placeholder="••••••••"></div>
+  <button class="btn btn-p" style="width:100%;margin-top:4px" onclick="doLogin()">Entrar</button>
+  <div id="le2" style="color:#ff5c5c;font-size:12px;margin-top:8px;text-align:center"></div>
+  <div class="div"></div>
+  <div style="font-size:12px;color:var(--muted);text-align:center">Atalhos demo:<br>
+    <span style="cursor:pointer;color:var(--accent)" onclick="email='lojista@demo.com';isAdm=false;goTo('dashboard')">Login Lojista</span> · 
+    <span style="cursor:pointer;color:var(--gold)" onclick="email='orlandojaime833@gmail.com';isAdm=true;goTo('admin')">Login ADM</span>
+  </div>
+</div>
+</div>`;}
+
+function doLogin(){
+  const e=document.getElementById('le')?.value||'';
+  if(ADMINS.includes(e)){email=e;isAdm=true;goTo('admin')}
+  else if(e){email=e;isAdm=false;goTo('dashboard')}
+  else{const el=document.getElementById('le2');if(el)el.textContent='Introduz um e-mail válido'}
+}
+
+function rDash(){
+  const p=PLANS[2];
+  return`<div class="page">
+<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
+  <div>
+    <h1>Dashboard do Lojista</h1>
+    <div class="sub">Bem-vindo, ${email||'lojista@demo.com'} · <span class="badge bp">${p.name}</span> · Expira: 10 Abr 2026</div>
+  </div>
+  <button class="btn btn-p btn-s" onclick="goTo('plans')">↑ Upgrade</button>
+</div>
+<div class="tabs">
+  ${['overview','products','settings','analytics'].map((t,i)=>`<button class="tab ${dtab===t?'active':''}" onclick="dtab='${t}';render()">${['Visão Geral','Produtos','Configurações','Analytics'][i]}</button>`).join('')}
+</div>
+${dtab==='overview'?rDashOv(p):dtab==='products'?rDashProd(p):dtab==='settings'?rDashSet():rDashAna()}
+</div>`;}
+
+function rDashOv(p){return`<div class="g4" style="margin-bottom:20px">
+  ${[['Produtos','6','de '+p.prods+' ('+p.name+')'],['Visitas','1,247','Últimos 30 dias'],['Encomendas','38','Este mês'],['Receita','3.7 TON','≈ $18.50']].map(([l,v,s])=>`<div class="stat"><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${s}</div></div>`).join('')}
+</div>
+<div class="g2">
+  <div class="card">
+    <div class="sh"><div class="st">Progresso do Plano</div></div>
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:var(--muted)">Produtos usados</span><span>6/${p.prods}</span></div>
+      <div class="pb"><div class="pf2" style="width:${Math.round(6/p.prods*100)}%"></div></div>
+    </div>
+    <div class="div"></div>
+    <div style="font-size:12px;color:var(--muted)">URL da loja: <span style="color:var(--accent2);cursor:pointer" onclick="goTo('store')">digimarket.com/s/a-minha-loja ↗</span></div>
+  </div>
+  <div class="card">
+    <div class="sh"><div class="st">Estado da Subscrição</div></div>
+    <div style="font-size:13px">
+      ${[['Plano activo',`<span class="badge bp">${p.name}</span>`],['Expiração','10 Abr 2026'],['Próx. pagamento',`<span style="color:var(--accent2)">${p.ton} TON</span>`]].map(([l,v])=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">${l?`<span style="color:var(--muted)">${l}</span>`:''}<span>${v}</span></div>`).join('')}
+    </div>
+    <div class="alert aw" style="margin:12px 0;font-size:12px"><span>⚠</span><span>Expira hoje. Renova para manter a loja activa.</span></div>
+    <button class="btn btn-p" style="width:100%" onclick="selPlan='${p.id}';step=0;goTo('checkout')">Renovar — ${p.ton} TON</button>
+  </div>
+</div>`;}
+
+function rDashProd(p){return`<div>
+<div class="sh">
+  <div class="st">Produtos (${PRODS.length}/${p.prods})</div>
+  <button class="btn btn-p btn-s">+ Adicionar</button>
+</div>
+<div class="card" style="padding:0">
+<div class="tw">
+<table>
+  <thead><tr><th>Produto</th><th>Preço</th><th>Imagens</th><th>Estado</th><th>Acções</th></tr></thead>
+  <tbody>
+    ${PRODS.map(pr=>`<tr>
+      <td><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">${pr.img}</span><div><div style="font-weight:500">${pr.name}</div><div style="font-size:11px;color:var(--muted)">${pr.desc}</div></div></div></td>
+      <td style="font-weight:500;color:var(--accent2)">$${pr.price}</td>
+      <td><span class="tag">${Math.floor(Math.random()*p.imgs)+1} imgs</span></td>
+      <td><span class="badge ba">Activo</span></td>
+      <td><div style="display:flex;gap:4px"><button class="btn btn-g btn-s">Editar</button><button class="btn btn-d btn-s">✕</button></div></td>
+    </tr>`).join('')}
+  </tbody>
+</table>
+</div>
+</div>
+</div>`;}
+
+function rDashSet(){return`<div class="g2">
+<div class="card">
+  <div class="st" style="margin-bottom:14px">Informações da Loja</div>
+  <div class="fr"><div class="lbl">Nome da loja</div><input value="A Minha Loja Online"></div>
+  <div class="fr"><div class="lbl">Descrição</div><input value="A melhor loja de tecnologia online"></div>
+  <div class="fr"><div class="lbl">Logótipo (URL)</div><input placeholder="https://..."></div>
+  <button class="btn btn-p btn-s">Guardar</button>
+</div>
+<div class="card">
+  <div class="st" style="margin-bottom:14px">Funcionalidades Pro</div>
+  <div class="fr"><div class="lbl">Domínio personalizado</div><input placeholder="minha-loja.com"></div>
+  <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:12px">Após configurar DNS, a activação é automática.</div>
+  <div class="fr"><div class="lbl">Banner personalizado (URL)</div><input placeholder="https://...imagem-banner.jpg"></div>
+  <div class="fr"><div class="lbl">Instagram</div><input placeholder="@minha_loja"></div>
+  <div class="fr"><div class="lbl">Facebook</div><input placeholder="facebook.com/minha-loja"></div>
+  <button class="btn btn-p btn-s">Guardar</button>
+</div>
+</div>`;}
+
+function rDashAna(){return`<div>
+<div class="g4" style="margin-bottom:16px">
+  ${[['Visitas','1,247'],['Conversão','3.0%'],['Top produto','Headphones'],['Receita','3.7 TON']].map(([l,v])=>`<div class="stat"><div class="sl">${l}</div><div class="sv" style="font-size:20px">${v}</div></div>`).join('')}
+</div>
+<div class="card">
+  <div class="st" style="margin-bottom:16px">Tráfego por origem (últimos 30 dias)</div>
+  <div class="ab">
+    ${[['Directo',72],['Google',48],['Social',35],['Referência',18],['Email',9]].map(([l,v])=>`
+    <div class="ar"><div class="al">${l}</div><div class="at"><div class="af" style="width:${v}%"></div></div><div class="av">${v}%</div></div>`).join('')}
+  </div>
+</div>
+</div>`;}
+
+function rStore(){return`<div class="page">
+<div style="margin-bottom:16px;display:flex;align-items:center;gap:12px">
+  <h1 style="margin-bottom:0">Loja Demo</h1>
+  <span class="badge bp">Plano Pro</span>
+  <span style="font-size:12px;color:var(--muted)">digimarket.com/s/a-minha-loja</span>
+</div>
+<div class="sp">
+  <div class="sb">
+    <div class="slc">ML</div>
+    <div>
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px">A Minha Loja Online</div>
+      <div style="font-size:11px;color:rgba(240,240,248,.6)">Tecnologia premium · Entrega em todo o país</div>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <div style="background:rgba(255,255,255,.15);border-radius:6px;padding:4px 10px;font-size:11px">📘 Facebook</div>
+      <div style="background:rgba(255,255,255,.15);border-radius:6px;padding:4px 10px;font-size:11px">📸 Instagram</div>
+    </div>
+  </div>
+  <div class="pg">
+    ${PRODS.map(p=>`
+    <div class="pc">
+      <div class="pi">${p.img}</div>
+      <div class="pci">
+        <div class="pcn">${p.name}</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${p.desc}</div>
+        <div class="pcp">$${p.price}</div>
+        <button class="pcb">🛒 Comprar</button>
+      </div>
+    </div>`).join('')}
+  </div>
+  <div style="padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);text-align:center">
+    Powered by <span style="color:var(--accent)">DIGIMarket</span> · Pagamentos em TON
+  </div>
+</div>
+</div>`;}
+
+function rAdmin(){return`<div class="page">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+  <div>
+    <h1>Painel Master ADM</h1>
+    <div class="sub">${email||'orlandojaime833@gmail.com'} · Acesso exclusivo de administrador</div>
+  </div>
+  <span class="badge bg" style="margin-left:auto">MASTER ADM</span>
+</div>
+<div class="tabs">
+  ${['users','config','overview'].map((t,i)=>`<button class="tab ${atab===t?'active':''}" onclick="atab='${t}';render()">${['Gestão de Utilizadores','Taxas e Configurações','Visão Geral'][i]}</button>`).join('')}
+</div>
+${atab==='users'?rAdmUsers():atab==='config'?rAdmConf():rAdmOv()}
+</div>`;}
+
+function rAdmUsers(){
+  const filtered=STORES.filter(s=>sf==='all'||s.plan.toLowerCase()===sf);
+  return`<div>
+<div class="sh">
+  <div class="st">Lojistas (${filtered.length})</div>
+  <div style="display:flex;gap:8px">
+    <select style="width:auto;padding:6px 10px" onchange="sf=this.value;render()">
+      <option value="all">Todos os planos</option>
+      ${PLANS.map(p=>`<option value="${p.id}" ${sf===p.id?'selected':''}>${p.name}</option>`).join('')}
+    </select>
+  </div>
+</div>
+<div class="card" style="padding:0">
+<div class="tw">
+<table>
+  <thead><tr><th>E-mail</th><th>Plano</th><th>Subscrição</th><th>Expiração</th><th>Estado</th><th>Receita</th><th>Acções</th></tr></thead>
+  <tbody>
+    ${filtered.map(s=>`<tr>
+      <td style="font-size:13px">${s.email}</td>
+      <td><span class="badge bp" style="font-size:10px">${s.plan}</span></td>
+      <td style="font-size:12px;color:var(--muted)">${s.sub}</td>
+      <td style="font-size:12px;color:var(--muted)">${s.exp||'—'}</td>
+      <td><span class="badge ${s.status==='active'?'ba':'bi'}">${s.status==='active'?'Activo':'Inactivo'}</span></td>
+      <td style="color:var(--accent2);font-size:13px">${s.rev} TON</td>
+      <td><div style="display:flex;gap:4px">
+        <button class="btn btn-g btn-s" style="font-size:11px">${s.status==='active'?'Desact.':'Activar'}</button>
+        <button class="btn btn-g btn-s" style="font-size:11px">Plano</button>
+        <button class="btn btn-d btn-s" style="font-size:11px">✕</button>
+      </div></td>
+    </tr>`).join('')}
+  </tbody>
+</table>
+</div>
+</div>
+</div>`;}
+
+function rAdmConf(){return`<div class="g2">
+<div class="card">
+  <div class="st" style="margin-bottom:14px">Preços dos Planos (TON/mês)</div>
+  ${PLANS.filter(p=>p.ton>0).map(p=>`
+  <div class="fr"><div class="lbl">${p.name}</div>
+  <div class="row"><input class="f1" value="${p.ton}" type="number" step="0.1"><span style="font-size:12px;color:var(--muted);min-width:60px">= $${p.price}/mês</span></div>
+  </div>`).join('')}
+  <button class="btn btn-p btn-s">Guardar Preços</button>
+</div>
+<div class="card">
+  <div class="st" style="margin-bottom:14px">Configurações TON Connect</div>
+  <div class="fr"><div class="lbl">API Key TON Connect</div><input value="2b95ea2ad1f9a2d53563a05d4"></div>
+  <div class="fr"><div class="lbl">Taxa câmbio TON/USD</div>
+  <div class="row"><input class="f1" value="5.00" type="number" step="0.01"><span style="font-size:12px;color:var(--muted)">USD/TON</span></div></div>
+  <div class="fr"><div class="lbl">Taxa de transacção (%)</div><input value="2.5" type="number" step="0.1"></div>
+  <button class="btn btn-p btn-s">Guardar Configurações</button>
+</div>
+<div class="card">
+  <div class="st" style="margin-bottom:14px">Activação de Planos</div>
+  ${PLANS.map(p=>`
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+    <span style="font-size:13px">${p.name}</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="badge ba" style="font-size:10px">Activo</span>
+      <button class="btn btn-g btn-s" style="font-size:11px">Desactivar</button>
+    </div>
+  </div>`).join('')}
+</div>
+<div class="card">
+  <div class="st" style="margin-bottom:14px">Domínio da Plataforma</div>
+  <div class="fr"><div class="lbl">Domínio principal</div><input value="digimarket.com"></div>
+  <div class="fr"><div class="lbl">Template sub-lojas</div><input value="digimarket.com/s/{slug}"></div>
+  <div class="alert ai" style="margin-bottom:12px;font-size:12px"><span>ℹ</span><span>Domínios personalizados (Plano Pro+) geridos pelo lojista via DNS.</span></div>
+  <button class="btn btn-p btn-s">Guardar Domínio</button>
+</div>
+</div>`;}
+
+function rAdmOv(){
+  const tot=STORES.length,act=STORES.filter(s=>s.status==='active').length;
+  const rev=STORES.reduce((a,s)=>a+s.rev,0).toFixed(1);
+  return`<div>
+<div class="g4" style="margin-bottom:20px">
+  ${[['Lojistas Totais',tot,'registados'],['Lojistas Activos',act,'actualmente'],['Receita Total',rev+' TON','≈ $'+(rev*5).toFixed(0)],['Taxa Activação',Math.round(act/tot*100)+'%','este mês']].map(([l,v,s])=>`
+  <div class="stat"><div class="sl">${l}</div><div class="sv">${v}</div><div class="ss">${s}</div></div>`).join('')}
+</div>
+<div class="g2">
+  <div class="card">
+    <div class="st" style="margin-bottom:14px">Distribuição por Plano</div>
+    <div class="dl">
+      <svg width="90" height="90" viewBox="0 0 90 90">
+        ${(()=>{
+          const d=[{n:'Free',v:1,c:'#8888aa'},{n:'Standard',v:1,c:'#7c6dfa'},{n:'Pro',v:2,c:'#4ecdc4'},{n:'Business',v:1,c:'#f4c542'}];
+          const tot=5;let off=0;
+          return d.map(x=>{
+            const pct=x.v/tot,arc=pct*2*Math.PI,r=35,cx=45,cy=45;
+            const x1=cx+r*Math.cos(off-Math.PI/2),y1=cy+r*Math.sin(off-Math.PI/2);
+            off+=arc;
+            const x2=cx+r*Math.cos(off-Math.PI/2),y2=cy+r*Math.sin(off-Math.PI/2);
+            return`<path d="M${cx},${cy} L${x1.toFixed(1)},${y1.toFixed(1)} A${r},${r} 0 ${arc>Math.PI?1:0},1 ${x2.toFixed(1)},${y2.toFixed(1)} Z" fill="${x.c}" opacity=".85"/>`;
+          }).join('')+'<circle cx="45" cy="45" r="20" fill="#1a1a26"/><text x="45" y="49" text-anchor="middle" font-size="12" fill="#f0f0f8" font-weight="500">'+tot+'</text>';
+        })()}
+      </svg>
+      <div class="dleg">
+        ${[['Free','1','#8888aa'],['Standard','1','#7c6dfa'],['Pro','2','#4ecdc4'],['Business','1','#f4c542']].map(([n,v,c])=>`
+        <div class="di"><div class="dd" style="background:${c}"></div><span style="flex:1">${n}</span><span style="font-weight:500">${v}</span></div>`).join('')}
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="st" style="margin-bottom:14px">Receita por Plano (TON)</div>
+    <div class="ab">
+      ${[['Business',5.1],['Pro',6.0],['Standard',0.8],['Free',0]].map(([l,v])=>`
+      <div class="ar"><div class="al">${l}</div><div class="at"><div class="af" style="width:${Math.round(v/6*100)}%"></div></div><div class="av">${v}</div></div>`).join('')}
+    </div>
+  </div>
+</div>
+</div>`;}
+
+render();
+</script>
+</body>
+</html>
