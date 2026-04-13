@@ -4,6 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Programa de Afiliados — 3DigitalShop</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -400,10 +401,10 @@ footer a:hover{color:#fff}
 </footer>
 
 <script>
-const SB_URL='https://tgslxwhmjbdkgwljhyxp.supabase.co';
-const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRnc2x4d2htamJka2d3bGpoeXhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzkyNTYsImV4cCI6MjA5MTQxNTI1Nn0.fLY-7PjMWpEPdZ-xa_UaL_FRINtsNjVOukXgVjzEkBk';
-const API='https://digimarket-h0vk.onrender.com';
-const sb=supabase.createClient(SB_URL,SB_ANON);
+const SB_URL = CONFIG.SUPABASE_URL;
+const SB_ANON = CONFIG.SUPABASE_ANON;
+const API = CONFIG.API_URL;
+const sb = supabase.createClient(SB_URL, SB_ANON);
 
 async function registar(){
   const email=document.getElementById('re')?.value?.trim();

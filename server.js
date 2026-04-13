@@ -16,9 +16,10 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyCtgYlBixQ0YFzOIujh6r
 const BACKEND_URL = process.env.BACKEND_URL || 'https://digimarket-h0vk.onrender.com';
 const FRONTEND_URL = 'https://orlandojaime833-ux.github.io/DIGIMARKET-';
 const ADMIN_EMAILS = ['orlandojaime833@gmail.com', 'orlandojaime800@gmail.com'];
-const XROCKET_BASE = 'https://pay.ton-rocket.com';
+const XROCKET_BASE    = 'https://pay.xrocket.tg';
 const COMISSAO_AFILIADO = 0.10;
 const TAXA_REDE = 0.01;
+const xHeaders = () => ({ 'Rocket-Pay-Key': XROCKET_API_KEY, 'Content-Type': 'application/json' });
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
@@ -154,82 +155,136 @@ app.get('/api/ai/historico/:contexto', async (req, res) => {
   res.json({ success: true, mensagens: data?.mensagens || [] });
 });
 
-// ── PLANOS ──
+const TON_WALLET_DESTINO = process.env.TON_WALLET_DESTINO || 'UQBWkBnCMCMGcBp_z3UBPAq2iRbH6XAOXzRlBHEgHdh3EXAMPLE';
+const PLANO_PRO = { id:'pro', nome:'Profissional', ton:1, max_produtos:50, max_imgs:8, suporte:'VIP 24/7' };
+
+// ── PLANOS (único) ──
 app.get('/api/planos', async (req, res) => {
-  const { data, error } = await supabase.from('planos').select('*').eq('ativo', true).order('ordem');
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true, planos: data });
+  res.json({ success: true, planos: [PLANO_PRO] });
 });
 
-// ── PAGAMENTOS ──
-app.get('/api/currencies', async (req, res) => {
-  try {
-    const r = await axios.get(`${XROCKET_BASE}/currencies`, { headers: { 'Rocket-Pay-Key': XROCKET_API_KEY } });
-    res.json({ success: true, currencies: (r.data?.data?.results||[]).filter(c=>c.available) });
-  } catch { res.json({ success: true, currencies: [{currency:'TONCOIN',name:'Toncoin'},{currency:'USDT',name:'Tether USD'},{currency:'NOT',name:'Notcoin'},{currency:'DOGS',name:'DOGS'}] }); }
-});
-
-app.get('/api/rate/:currency', async (req, res) => {
-  res.json({ success: true, currency: req.params.currency, usd_per_unit: await getTonRate(req.params.currency) });
-});
-
-app.post('/api/invoice/criar', async (req, res) => {
+// ── PAGAMENTO: TON Connect — iniciar ──
+app.post('/api/pagamento/ton-connect/iniciar', async (req, res) => {
   const user = await authUser(req);
   if (!user) return res.status(401).json({ error: 'Não autenticado' });
-  const { plano_id, currency, ref_afiliado } = req.body;
-  const { data: plano } = await supabase.from('planos').select('*').eq('id', plano_id).single();
-  if (!plano) return res.status(404).json({ error: 'Plano não encontrado' });
+  const { ref_afiliado } = req.body;
+  const memo = `3DS-${user.id.substring(0,8).toUpperCase()}`;
+  const memoB64 = Buffer.from(memo).toString('base64');
   try {
-    const cur = currency || 'TONCOIN';
-    let amount = plano.ton;
-    if (cur !== 'TONCOIN') { const r = await getTonRate('TONCOIN'); amount = parseFloat(((plano.ton * r) / await getTonRate(cur)).toFixed(6)); }
-    const xRes = await axios.post(`${XROCKET_BASE}/tg-invoices`, {
-      amount, currency: cur,
-      description: `3DigitalShop — Plano ${plano.nome} (1 mês)`,
-      hiddenMessage: `Plano ${plano.nome} activado!`,
-      payload: JSON.stringify({ userId: user.id, plano_id, currency: cur, ref_afiliado: ref_afiliado || null }),
-      callbackUrl: `${BACKEND_URL}/api/webhook/pagamento`,
-    }, { headers: { 'Rocket-Pay-Key': XROCKET_API_KEY, 'Content-Type': 'application/json' } });
-    const invoice = xRes.data?.data;
-    if (!invoice) throw new Error('Invoice não criada');
-    await supabase.from('pagamentos').insert({ lojista_id: user.id, plano_id, valor_ton: plano.ton, currency: cur, invoice_id: String(invoice.id), invoice_link: invoice.link, status: 'pending', ref_afiliado: ref_afiliado || null });
-    res.json({ success: true, invoice_id: invoice.id, invoice_link: invoice.link, amount, currency: cur });
-  } catch (err) { res.status(500).json({ error: err.response?.data?.message || err.message }); }
+    const { data, error } = await supabase.from('pagamentos').insert({
+      lojista_id: user.id, plano_id: 'pro', valor_ton: 1,
+      currency: 'TONCOIN', invoice_id: `TC-${Date.now()}`,
+      status: 'pending', ref_afiliado: ref_afiliado || null,
+      memo, metodo: 'ton_connect',
+    }).select().single();
+    if (error) throw new Error(error.message);
+    res.json({ success: true, pagamento_id: data.id, memo, memo_b64: memoB64, carteira_destino: TON_WALLET_DESTINO });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/api/invoice/:id/status', async (req, res) => {
+// ── PAGAMENTO: Manual — registar ──
+app.post('/api/pagamento/manual/registar', async (req, res) => {
   const user = await authUser(req);
   if (!user) return res.status(401).json({ error: 'Não autenticado' });
+  const { carteira_remetente, ref_afiliado } = req.body;
+  if (!carteira_remetente) return res.status(400).json({ error: 'Carteira remetente obrigatória' });
+  if (!carteira_remetente.startsWith('UQ') && !carteira_remetente.startsWith('EQ'))
+    return res.status(400).json({ error: 'Endereço TON inválido' });
+  const memo = `3DS-${user.id.substring(0,8).toUpperCase()}`;
   try {
-    const xRes = await axios.get(`${XROCKET_BASE}/tg-invoices/${req.params.id}`, { headers: { 'Rocket-Pay-Key': XROCKET_API_KEY } });
-    const paid = xRes.data?.data?.status === 'paid';
-    if (paid) { const { data: pag } = await supabase.from('pagamentos').select('*').eq('invoice_id', req.params.id).single(); if (pag && pag.status !== 'confirmed') await activarPlano(user.id, req.params.id, pag.ref_afiliado); }
-    res.json({ success: true, paid, status: xRes.data?.data?.status });
-  } catch { res.status(500).json({ error: 'Erro ao verificar' }); }
+    const { data, error } = await supabase.from('pagamentos').insert({
+      lojista_id: user.id, plano_id: 'pro', valor_ton: 1,
+      currency: 'TONCOIN', invoice_id: `MAN-${Date.now()}`,
+      status: 'pending', ref_afiliado: ref_afiliado || null,
+      memo, metodo: 'manual', carteira_remetente,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    // Iniciar verificação assíncrona
+    verificarTransacaoTON(data.id, carteira_remetente, user.id, ref_afiliado);
+    res.json({ success: true, pagamento_id: data.id, memo, carteira_destino: TON_WALLET_DESTINO });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── PAGAMENTO: Status ──
+app.get('/api/pagamento/:id/status', async (req, res) => {
+  const user = await authUser(req);
+  if (!user) return res.status(401).json({ error: 'Não autenticado' });
+  const { data } = await supabase.from('pagamentos').select('status').eq('id', req.params.id).eq('lojista_id', user.id).single();
+  if (!data) return res.status(404).json({ error: 'Não encontrado' });
+  res.json({ success: true, confirmado: data.status === 'confirmed', status: data.status });
+});
+
+// ── VERIFICAR TRANSACÇÃO NA BLOCKCHAIN TON ──
+async function verificarTransacaoTON(pagamentoId, carteiraRemetente, userId, refAfiliado, tentativas = 0) {
+  if (tentativas > 36) { // 30 min (36 x 50s)
+    await supabase.from('pagamentos').update({ status: 'manual_review' }).eq('id', pagamentoId);
+    return;
+  }
+  try {
+    // Consultar API pública TON Center para transacções recentes da carteira destino
+    const r = await axios.get(`https://toncenter.com/api/v2/getTransactions`, {
+      params: { address: TON_WALLET_DESTINO, limit: 20, archival: false },
+      timeout: 8000,
+    });
+    const txs = r.data?.result || [];
+    const match = txs.find(tx => {
+      const from = tx.in_msg?.source;
+      const value = parseInt(tx.in_msg?.value || '0');
+      const valueMatch = value >= 900000000 && value <= 1100000000; // 0.9–1.1 TON
+      const fromMatch = from && (from === carteiraRemetente ||
+        carteiraRemetente.startsWith('UQ') || carteiraRemetente.startsWith('EQ'));
+      return valueMatch && fromMatch;
+    });
+    if (match) {
+      const txHash = match.transaction_id?.hash || match.hash || null;
+      await activarPlanoDirecto(userId, pagamentoId, refAfiliado, txHash);
+      return;
+    }
+  } catch (e) { console.error('TON verify err:', e.message); }
+  // Reagendar verificação
+  setTimeout(() => verificarTransacaoTON(pagamentoId, carteiraRemetente, userId, refAfiliado, tentativas + 1), 50000);
+}
+
+async function activarPlanoDirecto(userId, pagamentoId, refAfiliado, txHash = null) {
+  const expira = new Date(); expira.setMonth(expira.getMonth() + 1);
+  const { data: pag } = await supabase.from('pagamentos').select('*').eq('id', pagamentoId).single();
+  if (!pag || pag.status === 'confirmed') return;
+  await supabase.from('pagamentos').update({
+    status: 'confirmed', confirmado_em: new Date().toISOString(), tx_hash: txHash,
+  }).eq('id', pagamentoId);
+  const linkMascarado = crypto.randomBytes(5).toString('hex').toUpperCase();
+  const { data: lj } = await supabase.from('lojistas').select('link_mascarado').eq('id', userId).single();
+  await supabase.from('lojistas').update({
+    plano_id: 'pro', plano_expira_em: expira.toISOString(),
+    status: 'active', link_mascarado: lj?.link_mascarado || linkMascarado,
+  }).eq('id', userId);
+  if (refAfiliado) await processarComissao(refAfiliado, pagamentoId, userId, 'pro', 1);
+}
+
+// ── WEBHOOK LEGADO (manter compatibilidade) ──
 app.post('/api/webhook/pagamento', async (req, res) => {
   try {
     const data = req.body;
     if (data?.type === 'invoicePaid' || data?.status === 'paid') {
       const payload = JSON.parse(data?.payload || data?.data?.payload || '{}');
-      const invoiceId = String(data?.id || data?.data?.id);
-      if (payload.userId && payload.plano_id) await activarPlano(payload.userId, invoiceId, payload.ref_afiliado);
+      if (payload.userId) {
+        const invoiceId = String(data?.id || data?.data?.id);
+        const { data: pag } = await supabase.from('pagamentos').select('id').eq('invoice_id', invoiceId).single();
+        if (pag) await activarPlanoDirecto(payload.userId, pag.id, payload.ref_afiliado);
+      }
     }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-async function activarPlano(userId, invoiceId, refAfiliado) {
-  const expira = new Date(); expira.setMonth(expira.getMonth() + 1);
-  const { data: pag } = await supabase.from('pagamentos').select('*').eq('invoice_id', invoiceId).single();
-  if (!pag || pag.status === 'confirmed') return;
-  await supabase.from('pagamentos').update({ status: 'confirmed', confirmado_em: new Date().toISOString() }).eq('invoice_id', invoiceId);
-  const linkMascarado = crypto.randomBytes(5).toString('hex').toUpperCase();
-  const { data: lj } = await supabase.from('lojistas').select('link_mascarado').eq('id', userId).single();
-  await supabase.from('lojistas').update({ plano_id: pag.plano_id, plano_expira_em: expira.toISOString(), status: 'active', link_mascarado: lj?.link_mascarado || linkMascarado }).eq('id', userId);
-  if (refAfiliado) await processarComissao(refAfiliado, invoiceId, userId, pag.plano_id, pag.valor_ton);
-}
+// ── ADMIN: verificar pagamento manualmente ──
+app.post('/api/admin/pagamento/:id/confirmar', async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const { data: pag } = await supabase.from('pagamentos').select('*').eq('id', req.params.id).single();
+  if (!pag) return res.status(404).json({ error: 'Pagamento não encontrado' });
+  await activarPlanoDirecto(pag.lojista_id, pag.id, pag.ref_afiliado, req.body.tx_hash || null);
+  res.json({ success: true });
+});
 
 async function processarComissao(refCodigo, invoiceId, lojistaId, planoId, valorTon) {
   try {
@@ -391,7 +446,7 @@ app.post('/api/afiliado/saque', async (req, res) => {
     const { data: saque } = await supabase.from('afiliado_saques').insert({ afiliado_id: af.id, valor_ton: saldo, carteira_destino, taxa_rede: TAXA_REDE, valor_liquido: liquido, status: 'processando' }).select().single();
     let txHash = null;
     try {
-      const xRes = await axios.post(`${XROCKET_BASE}/withdrawal`, { network:'TON', currency:'TONCOIN', amount: liquido, address: carteira_destino, comment: `3DigitalShop Afiliado #${af.codigo}` }, { headers: {'Rocket-Pay-Key':XROCKET_API_KEY,'Content-Type':'application/json'} });
+      const xRes = await axios.post(`${XROCKET_BASE}/withdrawal`, { network:'TON', currency:'TONCOIN', amount: liquido, address: carteira_destino, comment: `3DigitalShop Afiliado #${af.codigo}` }, { headers: xHeaders() });
       txHash = xRes.data?.data?.txHash||null;
     } catch {
       await supabase.from('afiliado_saques').update({ status: 'pendente' }).eq('id', saque.id);
@@ -481,6 +536,74 @@ app.put('/api/admin/config', async (req, res) => {
   const update={}; campos.forEach(c=>{if(req.body[c]!==undefined)update[c]=req.body[c];});
   await supabase.from('config_plataforma').update(update).eq('id',1);
   res.json({ success:true });
+});
+
+
+// ── ADMIN: Carteira xRocket — saldos e endereços por moeda ──
+app.get('/api/admin/xrocket/carteira', async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    // 1) Info da app: saldos actuais de cada moeda
+    const [appRes, curRes] = await Promise.all([
+      axios.get(`${XROCKET_BASE}/app`, { headers: xHeaders() }),
+      axios.get(`${XROCKET_BASE}/currencies`, { headers: xHeaders() }),
+    ]);
+
+    const appData    = appRes.data?.data || {};
+    const balances   = appData.balances || [];          // [{currency, balance}]
+    const currencies = curRes.data?.data?.results || []; // lista completa com redes/fees
+
+    // 2) Para cada moeda com saldo OU listada, buscar endereço de depósito
+    //    Endpoint: GET /app/coins/{currency}/deposit-address
+    const moedas = currencies.map(c => c.currency);
+    const depositAddresses = {};
+
+    await Promise.allSettled(
+      moedas.map(async (currency) => {
+        try {
+          const r = await axios.get(
+            `${XROCKET_BASE}/app/coins/${currency}/deposit-address`,
+            { headers: xHeaders(), timeout: 5000 }
+          );
+          const addr = r.data?.data;
+          if (addr) depositAddresses[currency] = addr; // {address, memo?}
+        } catch { /* moeda pode não ter endereço próprio */ }
+      })
+    );
+
+    // 3) Montar resposta consolidada
+    const resultado = currencies.map(c => {
+      const bal = balances.find(b => b.currency === c.currency);
+      const dep = depositAddresses[c.currency];
+      return {
+        currency:    c.currency,
+        nome:        c.name,
+        saldo:       parseFloat(bal?.balance || 0),
+        min_invoice: c.minInvoice,
+        min_saque:   c.minWithdraw,
+        redes:       (c.feeWithdraw?.networks || []).map(n => ({
+          codigo:    n.networkCode,
+          fee:       n.feeWithdraw?.fee,
+          fee_moeda: n.feeWithdraw?.currency,
+        })),
+        deposito: dep ? {
+          endereco: dep.address || dep.depositAddress || null,
+          memo:     dep.memo    || dep.tag             || null,
+          qr:       dep.qrCodeUrl                      || null,
+        } : null,
+      };
+    });
+
+    res.json({
+      success: true,
+      app_nome:   appData.name,
+      app_fee:    appData.feePercents,
+      total_moedas: resultado.length,
+      moedas:     resultado,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.response?.data?.message || err.message });
+  }
 });
 
 app.get('/health', (_,res) => res.json({ status:'ok', service:'3DigitalShop', ai:'Gemini 1.5 Flash', timestamp:new Date() }));

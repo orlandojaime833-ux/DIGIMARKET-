@@ -4,6 +4,8 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>3DigitalShop — Marketplace de Produtos Digitais</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/@tonconnect/ui@2/dist/tonconnect-ui.min.js"></script>
+<script src="config.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -227,11 +229,11 @@ textarea{resize:vertical;min-height:80px}
 <div id="modal-ct"></div>
 
 <script>
-const SB_URL='https://tgslxwhmjbdkgwljhyxp.supabase.co';
-const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRnc2x4d2htamJka2d3bGpoeXhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzkyNTYsImV4cCI6MjA5MTQxNTI1Nn0.fLY-7PjMWpEPdZ-xa_UaL_FRINtsNjVOukXgVjzEkBk';
-const API='https://digimarket-h0vk.onrender.com';
-const ADMINS=['orlandojaime833@gmail.com','orlandojaime800@gmail.com'];
-const sb=supabase.createClient(SB_URL,SB_ANON);
+const SB_URL = CONFIG.SUPABASE_URL;
+const SB_ANON = CONFIG.SUPABASE_ANON;
+const API = CONFIG.API_URL;
+const ADMINS = CONFIG.ADMINS;
+const sb = supabase.createClient(SB_URL, SB_ANON);
 
 // ── Estado global ──────────────────────────────────────
 let user=null, role='guest', lojista=null, afiliado=null;
@@ -320,6 +322,7 @@ function getNavItems(){
     {id:'lojistas',icon:'🏪',label:'Lojistas'},
     {id:'afiliados',icon:'🤝',label:'Afiliados'},
     {id:'saques',icon:'💸',label:'Saques'},
+    {id:'carteira',icon:'💎',label:'Carteira xRocket'},
     {id:'config',icon:'⚙️',label:'Configurações'},
     {id:'ai',icon:'🤖',label:'IA Assistente',badge:'AI'},
   ];
@@ -400,7 +403,7 @@ async function afterRender(){
     overview:role==='admin'?rAdminOverview:role==='afiliado'?rAfiliadoOverview:rLojistaDashboard,
     produtos:rProdutos,analytics:rAnalytics,automacoes:rAutomacoes,
     plano:rPlano,ai:rAI,config:role==='admin'?rAdminConfig:role==='afiliado'?rAfiliadoConfig:rLojistaConfig,
-    lojistas:rAdminLojistas,afiliados:rAdminAfiliados,saques:role==='admin'?rAdminSaques:rAfiliadoSaques,
+    lojistas:rAdminLojistas,afiliados:rAdminAfiliados,saques:role==='admin'?rAdminSaques:rAfiliadoSaques,carteira:rAdminCarteira,
     links:rAfiliadoLinks,comissoes:rAfiliadoComissoes,marketing:rAfiliadoMarketing,
   };
   const fn=renders[tab];
@@ -725,124 +728,309 @@ async function toggleAutomacao(tipo,ativa){
 }
 
 // ════════════════════════════════════════════════════════
-// PLANO / CHECKOUT
+// PLANO / CHECKOUT  —  Plano único 1 TON/mês
 // ════════════════════════════════════════════════════════
+const PLANO_UNICO = {
+  id:'pro', nome:'Profissional', ton:1,
+  features:[
+    '50 produtos activos',
+    '8 imagens por produto',
+    'Suporte VIP 24/7',
+    'SEO avançado + meta tags',
+    'Assistente IA Gemini ilimitado',
+    '15 automações activas',
+    'Link mascarado da loja',
+    'Analytics completo',
+    'Integração redes sociais',
+    'Gestão de campanhas',
+    'Comissões de afiliados',
+    'Descrições IA por produto',
+  ]
+};
+// Carteira TON da plataforma que recebe pagamentos manuais
+const TON_WALLET_DESTINO = 'UQBWkBnCMCMGcBp_z3UBPAq2iRbH6XAOXzRlBHEgHdh3EXAMPLE';
+
 async function rPlano(){
-  if(!planos.length){const r=await apiCall('GET','/api/planos');planos=r.planos||[];}
-  const actual=lojista?.plano_id||'amador';
-  return `<div>
-  <h3 style="font-weight:600;margin-bottom:6px">Plano Actual: <span style="color:var(--accent)">${actual}</span></h3>
-  <div style="color:var(--muted);font-size:13px;margin-bottom:20px">Expira: ${lojista?.plano_expira_em?new Date(lojista.plano_expira_em).toLocaleDateString('pt'):'N/A'}</div>
-  <div class="plans-grid">
-    ${planos.map(p=>`
-    <div class="plan-card ${actual===p.id?'selected':''}">
-      ${p.id==='classico'?'<div class="plan-pop">POPULAR</div>':''}
-      <div class="plan-name">${p.nome}</div>
-      <div><span class="plan-ton">${p.ton}</span> <span style="color:var(--muted);font-size:13px">TON/mês</span></div>
-      <ul class="plan-feat">
-        <li>${p.max_produtos} produto${p.max_produtos!==1?'s':''}</li>
-        <li>Suporte ${p.suporte}</li>
-        <li>SEO avançado</li>
-        <li>Marketing Digital</li>
-        <li>5 recursos gratuitos</li>
-        ${p.ia_descricao?'<li>Descrição por IA</li>':''}
-        ${p.promocoes?'<li>Promoções</li>':''}
-        ${p.redes_sociais?'<li>Integração redes sociais</li>':''}
-        ${p.campanhas?'<li>Gestão de campanhas</li>':''}
-        ${p.suporte_dedicado?'<li>Suporte dedicado</li>':''}
-      </ul>
-      <button class="btn ${actual===p.id?'btn-secondary':'btn-primary'} btn-sm" style="width:100%;margin-top:12px" onclick="iniciarCheckout('${p.id}')">
-        ${actual===p.id?'Renovar':'Subscrever'}
-      </button>
-    </div>`).join('')}
+  const expira = lojista?.plano_expira_em ? new Date(lojista.plano_expira_em) : null;
+  const ativo  = expira && expira > new Date();
+  const dias   = expira ? Math.max(0, Math.ceil((expira - new Date()) / 86400000)) : 0;
+  return `<div style="max-width:560px">
+  <div style="margin-bottom:24px">
+    <h2 style="font-size:20px;font-weight:800;margin-bottom:4px">Plano ${PLANO_UNICO.nome}</h2>
+    <div style="color:var(--muted);font-size:13px">
+      Estado: <span class="badge ${ativo?'b-green':'b-red'}">${ativo?`Activo · ${dias} dias restantes`:'Inactivo'}</span>
+      ${expira?`<span style="margin-left:8px">Expira: ${expira.toLocaleDateString('pt')}</span>`:''}
+    </div>
+  </div>
+
+  <div class="card" style="border:2px solid var(--accent);margin-bottom:20px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Plano Único</div>
+        <div style="font-size:36px;font-weight:800;line-height:1">1 <span style="font-size:18px;color:var(--muted);font-weight:500">TON</span></div>
+        <div style="color:var(--muted);font-size:12px;margin-top:2px">por mês · tudo incluído</div>
+      </div>
+      <div style="background:var(--accent-l);border:1px solid var(--accent-l2);border-radius:var(--rl);padding:8px 14px;text-align:center">
+        <div style="font-size:10px;color:var(--accent);font-weight:700;text-transform:uppercase">Equivale a</div>
+        <div style="font-size:18px;font-weight:800;color:var(--accent)">≈ $${(1*5).toFixed(2)}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;margin-bottom:18px">
+      ${PLANO_UNICO.features.map(f=>`
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+        <span style="color:var(--green);font-weight:700;flex-shrink:0">✓</span>${f}
+      </div>`).join('')}
+    </div>
+    <button class="btn btn-primary" style="width:100%;padding:12px;font-size:14px" onclick="iniciarCheckout()">
+      ${ativo?'🔄 Renovar Plano':'🚀 Activar Loja — 1 TON/mês'}
+    </button>
+  </div>
+
+  <div class="alert a-accent" style="font-size:12px">
+    <span>💎</span>
+    <span>Paga com <strong>TON Connect</strong> (Tonkeeper, MyTonWallet, etc.) ou por transferência directa se não tiveres carteira compatível.</span>
   </div>
   </div>`;
 }
 
-async function iniciarCheckout(planoId){
-  selPlano=planos.find(p=>p.id===planoId);
-  if(!selPlano) return;
-  selCurrency=null;invoiceData=null;checkoutStep=0;
-  if(!currencies.length){const r=await apiCall('GET','/api/currencies');currencies=r.currencies||[{currency:'TONCOIN',name:'Toncoin'},{currency:'USDT',name:'Tether USD'}];}
+async function iniciarCheckout(){
+  invoiceData=null; checkoutStep=0;
+  if(pollInterval){clearInterval(pollInterval);pollInterval=null;}
   goTo('checkout');
 }
 
-function rCheckout(){
-  if(!selPlano) return '<div class="page-center"><button class="btn btn-secondary" onclick="goTo(\'dashboard\')">← Voltar</button></div>';
-  const ref=new URLSearchParams(location.search).get('ref')||null;
-  const icons={TONCOIN:'💎',USDT:'💵',NOT:'🪙',DOGS:'🐶',BOLT:'⚡'};
-  const steps=['Escolher Moeda','Confirmar','Aguardar','Activo'];
+// ── Estado do checkout ──
+let checkoutMode = null; // 'tonconnect' | 'manual'
+let manualPagId  = null;
+let tcConnector  = null;
 
-  if(invoiceData&&checkoutStep===3){
+function rCheckout(){
+  const ref = new URLSearchParams(location.search).get('ref') || null;
+
+  // Passo 3: Sucesso
+  if(checkoutStep === 3){
     return `<div class="page-center">
-    <div class="auth-card" style="max-width:420px">
-      <div style="text-align:center">
-        <div style="font-size:50px;margin-bottom:12px">🎉</div>
-        <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Plano ${selPlano.nome} Activado!</h2>
-        <div style="color:var(--muted);margin-bottom:20px">A tua loja está activa e o link mascarado foi gerado.</div>
-        <button class="btn btn-primary" style="width:100%" onclick="loadLojista().then(()=>goTo('dashboard'))">Ir para o Dashboard →</button>
+    <div class="auth-card" style="max-width:420px;text-align:center">
+      <div style="font-size:56px;margin-bottom:12px">🎉</div>
+      <h2 style="font-size:22px;font-weight:800;margin-bottom:8px">Loja Activada!</h2>
+      <div style="color:var(--muted);margin-bottom:20px;font-size:13px;line-height:1.6">O teu plano <strong>Profissional</strong> está activo.<br>O link mascarado da loja foi gerado.</div>
+      <button class="btn btn-primary" style="width:100%;padding:12px" onclick="loadLojista().then(()=>goTo('dashboard'))">Ir para o Dashboard →</button>
+    </div></div>`;
+  }
+
+  // Passo 2b: Aguardar verificação manual
+  if(checkoutStep === 2 && checkoutMode === 'manual'){
+    return `<div class="page-center">
+    <div class="auth-card" style="max-width:480px">
+      <h2 style="font-size:17px;font-weight:700;margin-bottom:4px">⏳ A verificar pagamento</h2>
+      <div style="color:var(--muted);font-size:12px;margin-bottom:20px">O sistema está a monitorizar a blockchain TON. Pode demorar alguns minutos.</div>
+      <div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:16px;font-size:13px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">Carteira remetente</span><span style="font-family:monospace;font-size:11px">${(invoiceData?.carteira_remetente||'').substring(0,20)}...</span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--muted)">Valor</span><span style="font-weight:700;color:var(--accent)">1 TON</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Referência</span><span style="font-family:monospace;font-size:11px">${invoiceData?.memo||''}</span></div>
+      </div>
+      <div style="text-align:center;padding:14px 0">
+        <div class="spin" style="width:32px;height:32px;border-width:3px;margin:0 auto 10px"></div>
+        <div style="font-size:13px;color:var(--muted)" id="verify-msg">A verificar na blockchain...</div>
+      </div>
+      <div class="alert a-gold" style="font-size:12px;margin-bottom:12px">
+        <span>⚠</span><span>Se o pagamento não for detectado automaticamente em 30 minutos, a equipa verifica manualmente e activa a tua loja.</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" style="width:100%" onclick="checkoutStep=1;checkoutMode=null;renderRoot()">← Tentar outro método</button>
+    </div></div>`;
+  }
+
+  // Passo 1: Escolher método
+  if(checkoutStep === 1){
+    return `<div class="page-center">
+    <div class="auth-card" style="max-width:480px">
+      <button class="btn btn-secondary btn-sm" onclick="goTo('plano','plano')" style="margin-bottom:16px">← Voltar</button>
+      <h2 style="font-size:17px;font-weight:700;margin-bottom:4px">Activar Plano Profissional</h2>
+      <div style="color:var(--muted);font-size:12px;margin-bottom:20px">Valor: <strong style="color:var(--accent)">1 TON / mês</strong></div>
+
+      <!-- TON Connect -->
+      <div style="border:2px solid var(--accent);border-radius:var(--rl);padding:18px;margin-bottom:12px;cursor:pointer;transition:all .15s" onclick="pagarTonConnect('${ref||''}')" id="tc-card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:24px">💎</span>
+          <div>
+            <div style="font-weight:700;font-size:14px">TON Connect <span style="background:var(--green-l);color:var(--green);font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:4px">RECOMENDADO</span></div>
+            <div style="font-size:11px;color:var(--muted)">Tonkeeper · MyTonWallet · OpenMask</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.6">Liga a tua carteira e confirma o pagamento com 1 clique. Activação automática e instantânea.</div>
+        <button class="btn btn-primary btn-sm" style="width:100%;margin-top:12px" id="tc-btn">💎 Ligar Carteira e Pagar</button>
+      </div>
+
+      <div style="text-align:center;font-size:12px;color:var(--muted);margin:10px 0">— ou se não tens carteira TON Connect —</div>
+
+      <!-- Manual -->
+      <div style="border:1px solid var(--border);border-radius:var(--rl);padding:18px;cursor:pointer" onclick="mostrarPagamentoManual('${ref||''}')">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:24px">📤</span>
+          <div>
+            <div style="font-weight:700;font-size:14px">Transferência Manual</div>
+            <div style="font-size:11px;color:var(--muted)">Qualquer carteira TON (Telegram Wallet, etc.)</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.6">Envia 1 TON manualmente para o endereço da plataforma. Activação em até 30 minutos após detecção.</div>
+        <button class="btn btn-secondary btn-sm" style="width:100%;margin-top:12px">📤 Pagar Manualmente</button>
+      </div>
+
+      <div id="checkout-err" style="color:var(--red);font-size:12px;margin-top:10px"></div>
+    </div></div>`;
+  }
+
+  // Passo 1.5: Formulário manual
+  if(checkoutStep === 15){
+    return `<div class="page-center">
+    <div class="auth-card" style="max-width:480px">
+      <button class="btn btn-secondary btn-sm" onclick="checkoutStep=1;renderRoot()" style="margin-bottom:16px">← Voltar</button>
+      <h2 style="font-size:17px;font-weight:700;margin-bottom:16px">📤 Transferência Manual</h2>
+
+      <div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Envia exactamente para:</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="font-family:monospace;font-size:11px;word-break:break-all;flex:1;color:var(--accent)">${TON_WALLET_DESTINO}</div>
+          <button class="copy-btn" onclick="copyText('${TON_WALLET_DESTINO}')">Copiar</button>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+          <span style="color:var(--muted)">Valor exacto</span>
+          <span style="font-weight:800;color:var(--accent);font-size:16px">1 TON</span>
+        </div>
+      </div>
+
+      <div class="alert a-gold" style="font-size:12px;margin-bottom:16px">
+        <span>⚠</span><span>Envia <strong>exactamente 1 TON</strong>. Valores diferentes não serão detectados automaticamente.</span>
+      </div>
+
+      <div class="fr">
+        <div class="lbl">A tua carteira TON (de onde vais enviar) *</div>
+        <input id="manual-wallet" placeholder="UQ... ou EQ...">
+        <div class="hint">Precisamos do endereço remetente para rastrear a transacção na blockchain.</div>
+      </div>
+
+      <div id="manual-err" style="color:var(--red);font-size:12px;margin-bottom:8px"></div>
+      <button class="btn btn-primary" style="width:100%;padding:12px" id="manual-btn" onclick="confirmarPagamentoManual('${ref||''}')">
+        ✓ Já enviei — Verificar Pagamento
+      </button>
+      <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.6">
+        Ao clicar, o sistema vai monitorizar a tua carteira na blockchain TON<br>e activar a loja automaticamente quando detectar o pagamento.
       </div>
     </div></div>`;
   }
 
+  // Passo 0: Loading / init
   return `<div class="page-center">
   <div class="auth-card" style="max-width:480px">
     <button class="btn btn-secondary btn-sm" onclick="goTo('plano','plano')" style="margin-bottom:16px">← Voltar</button>
-    <h2 style="font-size:18px;font-weight:700;margin-bottom:4px">Plano ${selPlano.nome}</h2>
-    <div style="color:var(--muted);font-size:13px;margin-bottom:16px">${selPlano.ton} TON/mês · ${selPlano.max_produtos} produto${selPlano.max_produtos!==1?'s':''}</div>
-
-    <div style="display:flex;margin-bottom:18px">
-      ${steps.map((s,i)=>`
-      <div class="step">
-        <div class="step-num ${i<checkoutStep?'done':i===checkoutStep?'active':'wait'}">${i<checkoutStep?'✓':i+1}</div>
-        <div class="step-label">${s}</div>
-      </div>
-      ${i<3?`<div class="step-line ${i<checkoutStep?'done':''}"></div>`:''}`).join('')}
+    <div style="text-align:center;padding:30px">
+      <div class="spin" style="width:30px;height:30px;border-width:3px;margin:0 auto 12px"></div>
+      <div style="font-size:13px;color:var(--muted)">A preparar checkout...</div>
     </div>
-
-    ${checkoutStep===0?`
-    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">Escolhe a moeda TON para pagar:</div>
-    <div class="cur-grid">
-      ${currencies.slice(0,6).map(c=>`<div class="cur-card ${selCurrency===c.currency?'sel':''}" onclick="selCurrency='${c.currency}';document.getElementById('pay-btn').disabled=false;document.getElementById('pay-btn').textContent='Pagar com ${c.currency}'">
-        <div style="font-size:20px;margin-bottom:4px">${icons[c.currency]||'🔸'}</div>
-        <div style="font-weight:600;font-size:12px">${c.currency}</div>
-        <div style="font-size:10px;color:var(--muted)">${c.name||''}</div>
-      </div>`).join('')}
-    </div>
-    <div id="checkout-err" style="color:var(--red);font-size:12px;margin-bottom:8px"></div>
-    <button id="pay-btn" class="btn btn-primary" style="width:100%;padding:12px" onclick="criarInvoice('${ref||''}')" disabled>Selecciona uma moeda</button>
-    `:checkoutStep===1?`
-    <div class="alert a-accent" style="margin-bottom:14px"><span>ℹ</span><span>Uma janela do xRocket foi aberta. Paga lá e a activação é automática.</span></div>
-    <div style="text-align:center;padding:16px">
-      <div class="spin" style="width:36px;height:36px;border-width:3px;margin:0 auto 12px"></div>
-      <div style="font-size:13px;color:var(--muted)">A verificar pagamento na blockchain TON...</div>
-    </div>
-    <a href="${invoiceData?.invoice_link||'#'}" target="_blank" class="btn btn-secondary" style="width:100%;justify-content:center">Reabrir xRocket ↗</a>
-    `:''}
   </div></div>`;
 }
 
-async function criarInvoice(refAfiliado){
-  if(!selCurrency||!selPlano) return;
-  const btn=document.getElementById('pay-btn');
-  if(btn){btn.disabled=true;btn.innerHTML='<div class="spin"></div> A criar...';}
-  const r=await apiCall('POST','/api/invoice/criar',{plano_id:selPlano.id,currency:selCurrency,ref_afiliado:refAfiliado||null});
+// ── TON Connect ──────────────────────────────────────────
+async function pagarTonConnect(refAfiliado){
+  const btn = document.getElementById('tc-btn');
+  if(btn){ btn.disabled=true; btn.innerHTML='<div class="spin"></div> A ligar...'; }
+  try {
+    // Criar registo de pagamento pendente
+    const r = await apiCall('POST', '/api/pagamento/ton-connect/iniciar', { ref_afiliado: refAfiliado||null });
+    if(!r.success){ throw new Error(r.error||'Erro ao iniciar'); }
+    invoiceData = r;
+
+    // Usar TonConnect SDK via CDN (carregado abaixo)
+    if(typeof TonConnectUI !== 'undefined'){
+      const tonConnect = new TonConnectUI.TonConnectUI({
+        manifestUrl: `${CONFIG.FRONTEND_URL}/tonconnect-manifest.json`,
+        buttonRootId: null,
+      });
+      const tx = {
+        validUntil: Math.floor(Date.now()/1000) + 600,
+        messages:[{
+          address: TON_WALLET_DESTINO,
+          amount:  '1000000000', // 1 TON em nanotons
+          payload: r.memo_b64 || '',
+        }]
+      };
+      await tonConnect.sendTransaction(tx);
+      // Pagamento enviado — polling automático
+      checkoutMode='tonconnect'; checkoutStep=2;
+      renderRoot();
+      iniciarPollingVerificacao(r.pagamento_id);
+    } else {
+      // Fallback: abrir deep link do Tonkeeper
+      const deepLink = `https://app.tonkeeper.com/transfer/${encodeURIComponent(TON_WALLET_DESTINO)}?amount=1000000000&text=${encodeURIComponent(r.memo||'3DS')}`;
+      window.open(deepLink, '_blank');
+      // Tratar como manual a partir daqui
+      invoiceData = r;
+      checkoutMode = 'tonconnect';
+      checkoutStep = 2;
+      renderRoot();
+      iniciarPollingVerificacao(r.pagamento_id);
+    }
+  } catch(e){
+    const el = document.getElementById('checkout-err');
+    if(el) el.textContent = e.message||'Erro ao ligar carteira';
+    if(btn){ btn.disabled=false; btn.innerHTML='💎 Ligar Carteira e Pagar'; }
+  }
+}
+
+function mostrarPagamentoManual(ref){
+  checkoutStep = 15;
+  renderRoot();
+}
+
+async function confirmarPagamentoManual(refAfiliado){
+  const carteira = document.getElementById('manual-wallet')?.value?.trim();
+  const errEl    = document.getElementById('manual-err');
+  if(!carteira){ errEl.textContent='Introduz o endereço da tua carteira TON'; return; }
+  if(!carteira.startsWith('UQ') && !carteira.startsWith('EQ')){
+    errEl.textContent='Endereço inválido. Deve começar com UQ ou EQ'; return;
+  }
+  const btn = document.getElementById('manual-btn');
+  if(btn){ btn.disabled=true; btn.innerHTML='<div class="spin"></div> A registar...'; }
+  errEl.textContent='';
+
+  const r = await apiCall('POST', '/api/pagamento/manual/registar', {
+    carteira_remetente: carteira,
+    ref_afiliado: refAfiliado||null,
+  });
   if(!r.success){
-    const el=document.getElementById('checkout-err');
-    if(el)el.textContent=r.error||'Erro ao criar invoice';
-    if(btn){btn.disabled=false;btn.textContent=`Pagar com ${selCurrency}`;}
+    errEl.textContent = r.error||'Erro ao registar';
+    if(btn){ btn.disabled=false; btn.textContent='✓ Já enviei — Verificar Pagamento'; }
     return;
   }
-  invoiceData=r;checkoutStep=1;
-  window.open(r.invoice_link,'_blank');
+  invoiceData    = { ...r, carteira_remetente: carteira };
+  checkoutMode   = 'manual';
+  checkoutStep   = 2;
   renderRoot();
-  // Polling
-  let polls=0;
-  pollInterval=setInterval(async()=>{
-    polls++;if(polls>72){clearInterval(pollInterval);return;}
-    const s=await apiCall('GET',`/api/invoice/${r.invoice_id}/status`);
-    if(s.paid){clearInterval(pollInterval);checkoutStep=3;await loadLojista();renderRoot();}
-  },5000);
+  iniciarPollingVerificacao(r.pagamento_id);
+}
+
+function iniciarPollingVerificacao(pagamentoId){
+  if(pollInterval) clearInterval(pollInterval);
+  let tentativas = 0;
+  pollInterval = setInterval(async()=>{
+    tentativas++;
+    const msgEl = document.getElementById('verify-msg');
+    if(msgEl) msgEl.textContent = `A verificar na blockchain... (tentativa ${tentativas})`;
+    if(tentativas > 180){ // 15 min
+      clearInterval(pollInterval);
+      if(msgEl) msgEl.textContent = 'Verificação automática a aguardar. A equipa vai confirmar manualmente em breve.';
+      return;
+    }
+    try{
+      const s = await apiCall('GET', `/api/pagamento/${pagamentoId}/status`);
+      if(s.confirmado){
+        clearInterval(pollInterval);
+        checkoutStep = 3;
+        await loadLojista();
+        renderRoot();
+      }
+    } catch(e){}
+  }, 5000);
 }
 
 // ════════════════════════════════════════════════════════
@@ -1288,6 +1476,105 @@ async function saveAdminConfig(){
   });
   const msg=document.getElementById('adm-msg');
   if(msg)msg.innerHTML=r.success?`<span style="color:var(--green)">✓ Guardado</span>`:`<span style="color:var(--red)">${r.error}</span>`;
+}
+
+
+// ════════════════════════════════════════════════════════
+// ADMIN — Carteira xRocket
+// ════════════════════════════════════════════════════════
+async function rAdminCarteira(){
+  const ct=document.getElementById('ct');
+  if(ct) ct.innerHTML=`<div style="text-align:center;padding:40px"><div class="spin" style="width:30px;height:30px;border-width:3px;margin:0 auto 12px"></div><div style="color:var(--muted);font-size:13px">A carregar carteira xRocket...</div></div>`;
+
+  const r=await apiCall('GET','/api/admin/xrocket/carteira');
+  if(!r.success) return `<div class="alert a-red"><span>✕</span><span>${r.error||'Erro ao carregar carteira'}</span></div>`;
+
+  const moedas=r.moedas||[];
+  const comSaldo=moedas.filter(m=>m.saldo>0);
+  const totalTON=moedas.find(m=>m.currency==='TONCOIN')?.saldo||0;
+
+  // Ícones por moeda
+  const icons={TONCOIN:'💎',USDT:'💵',NOT:'🪙',DOGS:'🐶',BTC:'₿',ETH:'Ξ',BOLT:'⚡',XROCK:'🚀'};
+
+  return `<div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+    <div>
+      <h2 style="font-size:20px;font-weight:700;margin-bottom:3px">💎 Carteira xRocket</h2>
+      <div style="font-size:12px;color:var(--muted)">${r.app_nome||'App'} · Taxa: ${r.app_fee||0}% · ${r.total_moedas||0} moedas disponíveis</div>
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="tab='carteira';renderRoot()">🔄 Actualizar</button>
+  </div>
+
+  <!-- Saldos com valor -->
+  ${comSaldo.length?`
+  <div style="margin-bottom:20px">
+    <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">Saldos Actuais</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">
+      ${comSaldo.map(m=>`
+      <div class="card" style="padding:14px;border-left:3px solid var(--${m.currency==='TONCOIN'?'accent':'green'})">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:22px">${icons[m.currency]||'🔸'}</span>
+          <div>
+            <div style="font-weight:700;font-size:13px">${m.currency}</div>
+            <div style="font-size:10px;color:var(--muted)">${m.nome||''}</div>
+          </div>
+        </div>
+        <div style="font-size:22px;font-weight:800;color:var(--accent)">${parseFloat(m.saldo).toFixed(4)}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${m.currency}</div>
+        ${m.deposito?.endereco?`
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+          <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">ENDEREÇO DE DEPÓSITO</div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <div style="font-family:monospace;font-size:10px;color:var(--accent);flex:1;word-break:break-all;line-height:1.4">${m.deposito.endereco}</div>
+            <button class="copy-btn" style="flex-shrink:0" onclick="copyText('${m.deposito.endereco}')">⎘</button>
+          </div>
+          ${m.deposito.memo?`<div style="font-size:10px;color:var(--muted);margin-top:4px">MEMO: <strong>${m.deposito.memo}</strong></div>`:''}
+        </div>`:''}
+      </div>`).join('')}
+    </div>
+  </div>`:`
+  <div class="alert a-gold" style="margin-bottom:16px"><span>ℹ</span><span>Nenhum saldo activo na carteira xRocket.</span></div>`}
+
+  <!-- Todas as moedas com endereços -->
+  <div>
+    <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">
+      Todas as Moedas — Endereços de Depósito (${moedas.length})
+    </div>
+    <div class="card" style="padding:0">
+    <div class="tw"><table>
+      <thead><tr><th>Moeda</th><th>Nome</th><th>Saldo</th><th>Endereço de Depósito</th><th>Memo/Tag</th><th>Redes</th><th>Min. Saque</th></tr></thead>
+      <tbody>
+        ${moedas.map(m=>`<tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:7px">
+              <span style="font-size:18px">${icons[m.currency]||'🔸'}</span>
+              <span style="font-weight:700;font-size:13px">${m.currency}</span>
+            </div>
+          </td>
+          <td style="font-size:12px;color:var(--muted)">${m.nome||'—'}</td>
+          <td style="font-weight:${m.saldo>0?'700':'400'};color:${m.saldo>0?'var(--accent)':'var(--dim)'}">
+            ${m.saldo>0?parseFloat(m.saldo).toFixed(6):'—'}
+          </td>
+          <td style="max-width:220px">
+            ${m.deposito?.endereco?`
+            <div style="display:flex;align-items:center;gap:5px">
+              <div style="font-family:monospace;font-size:10px;color:var(--text2);flex:1;word-break:break-all;line-height:1.4">${m.deposito.endereco}</div>
+              <button class="copy-btn" onclick="copyText('${m.deposito.endereco}')">⎘</button>
+            </div>`:`<span style="color:var(--dim);font-size:12px">—</span>`}
+          </td>
+          <td style="font-family:monospace;font-size:11px;color:var(--muted)">
+            ${m.deposito?.memo||'—'}
+          </td>
+          <td style="font-size:11px">
+            ${(m.redes||[]).map(n=>`<div style="margin-bottom:2px"><span class="badge b-dim" style="font-size:9px">${n.codigo}</span> <span style="color:var(--muted)">${n.fee?n.fee+' '+n.fee_moeda:''}</span></div>`).join('')||'—'}
+          </td>
+          <td style="font-size:12px;color:var(--muted)">${m.min_saque||'—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div></div>
+  </div>
+
+  </div>`;
 }
 
 // ════════════════════════════════════════════════════════
