@@ -1,296 +1,290 @@
--- ════════════════════════════════════════════════════════
--- 3DigitalShop — Schema Completo v3.0
--- Cola no SQL Editor do Supabase e clica "Run"
--- ════════════════════════════════════════════════════════
+-- ============================================================
+-- 3DigitalShop — Schema Principal (Supabase SQL Editor)
+-- Versão 3.0 | Execute este ficheiro primeiro
+-- ============================================================
 
--- Planos disponíveis
-create table if not exists public.planos (
-  id text primary key,
-  nome text not null,
-  ton numeric(10,4) not null,
-  max_produtos int not null,
-  max_imgs int default 3,
-  suporte text default 'basico',
-  ia_descricao boolean default false,
-  promocoes boolean default false,
-  redes_sociais boolean default false,
-  campanhas boolean default false,
-  suporte_dedicado boolean default false,
-  recursos_gratuitos boolean default true,
-  ativo boolean default true,
-  ordem int default 0
+-- ── EXTENSÕES ────────────────────────────────────────────────
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- ── PLANOS ───────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS planos (
+  id            TEXT PRIMARY KEY,  -- 'amador', 'simples', etc.
+  nome          TEXT NOT NULL,
+  ton           NUMERIC(10,4) NOT NULL DEFAULT 0,
+  max_produtos  INT NOT NULL DEFAULT 1,
+  max_imgs      INT NOT NULL DEFAULT 2,
+  suporte       TEXT NOT NULL DEFAULT 'básico',
+  ordem         INT NOT NULL DEFAULT 0,
+  ativo         BOOLEAN NOT NULL DEFAULT TRUE,
+  criado_em     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-insert into public.planos values
-  ('amador',      'Amador',       0.5,  1,  2, 'basico',     false, false, false, false, false, true, true, 1),
-  ('simples',     'Simples',      1.5,  2,  3, 'basico',     false, false, false, false, false, true, true, 2),
-  ('iniciante',   'Iniciante',    3.0,  5,  4, 'prioritario',false, false, false, false, false, true, true, 3),
-  ('basico',      'Básico',       5.0,  10, 5, 'prioritario',false, true,  false, false, false, true, true, 4),
-  ('classico',    'Clássico',     8.0,  15, 6, 'prioritario',true,  true,  true,  false, false, true, true, 5),
-  ('profissional','Profissional', 10.0, 20, 8, 'dedicado',   true,  true,  true,  true,  true,  true, true, 6)
-on conflict (id) do update set
-  nome=excluded.nome, ton=excluded.ton, max_produtos=excluded.max_produtos;
+INSERT INTO planos (id, nome, ton, max_produtos, max_imgs, suporte, ordem) VALUES
+  ('amador',        'Amador',        0.5,  1,  2, 'básico',        1),
+  ('simples',       'Simples',       1.5,  3,  3, 'básico',        2),
+  ('iniciante',     'Iniciante',     3.0,  5,  4, 'e-mail',        3),
+  ('basico',        'Básico',        5.0,  10, 5, 'e-mail',        4),
+  ('classico',      'Clássico',      8.0,  20, 6, 'prioritário',   5),
+  ('profissional',  'Profissional', 10.0,  50, 8, 'VIP 24/7',      6)
+ON CONFLICT (id) DO NOTHING;
 
--- Lojistas
-create table if not exists public.lojistas (
-  id uuid references auth.users on delete cascade primary key,
-  email text not null,
-  nome_loja text default 'A Minha Loja',
-  descricao text,
-  logo_url text,
-  banner_url text,
-  slug text unique,
-  link_mascarado text unique,
-  instagram text,
-  facebook text,
-  tiktok text,
-  youtube text,
-  website text,
-  dominio_personalizado text,
-  plano_id text references public.planos(id) default 'amador',
-  plano_expira_em timestamptz,
-  status text default 'active' check (status in ('active','inactive','suspended')),
-  total_cliques int default 0,
-  total_produtos int default 0,
-  ai_contexto text,
-  criado_em timestamptz default now()
+-- ── LOJISTAS ─────────────────────────────────────────────────
+-- Espelha auth.users; criado via trigger
+CREATE TABLE IF NOT EXISTS lojistas (
+  id               UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email            TEXT NOT NULL,
+  nome_loja        TEXT,
+  descricao        TEXT,
+  logo_url         TEXT,
+  banner_url       TEXT,
+  slug             TEXT UNIQUE,
+  link_mascarado   TEXT UNIQUE,
+  plano_id         TEXT NOT NULL DEFAULT 'amador' REFERENCES planos(id),
+  plano_expira_em  TIMESTAMPTZ,
+  status           TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive','suspended')),
+  total_cliques    INT NOT NULL DEFAULT 0,
+  instagram        TEXT,
+  facebook         TEXT,
+  tiktok           TEXT,
+  youtube          TEXT,
+  website          TEXT,
+  criado_em        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_em   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Produtos (link externo — sem processamento de pagamento)
-create table if not exists public.produtos (
-  id uuid default gen_random_uuid() primary key,
-  lojista_id uuid references public.lojistas(id) on delete cascade,
-  nome text not null,
-  descricao text,
-  descricao_ia text,
-  preco numeric(10,2),
-  preco_original numeric(10,2),
-  moeda text default 'USD',
-  imagens text[] default '{}',
-  categoria text,
-  tags text[] default '{}',
-  link_externo text not null,
-  provedor text,
-  seo_titulo text,
-  seo_descricao text,
-  seo_tags text[] default '{}',
-  total_cliques int default 0,
-  total_views int default 0,
-  media_reviews numeric(3,2) default 0,
-  total_reviews int default 0,
-  ativo boolean default true,
-  destaque boolean default false,
-  criado_em timestamptz default now()
+-- Trigger: criar registo em lojistas após signup
+CREATE OR REPLACE FUNCTION criar_lojista_apos_signup()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  INSERT INTO public.lojistas (id, email)
+  VALUES (NEW.id, NEW.email)
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION criar_lojista_apos_signup();
+
+-- ── PRODUTOS ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS produtos (
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  lojista_id     UUID NOT NULL REFERENCES lojistas(id) ON DELETE CASCADE,
+  nome           TEXT NOT NULL,
+  descricao      TEXT,
+  preco          NUMERIC(10,2),
+  imagens        TEXT[] DEFAULT '{}',
+  categoria      TEXT,
+  tags           TEXT[] DEFAULT '{}',
+  link_externo   TEXT NOT NULL,
+  provedor       TEXT,
+  seo_titulo     TEXT,
+  seo_descricao  TEXT,
+  ativo          BOOLEAN NOT NULL DEFAULT TRUE,
+  total_cliques  INT NOT NULL DEFAULT 0,
+  total_views    INT NOT NULL DEFAULT 0,
+  media_reviews  NUMERIC(3,2) NOT NULL DEFAULT 0,
+  total_reviews  INT NOT NULL DEFAULT 0,
+  criado_em      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Reviews
-create table if not exists public.reviews (
-  id uuid default gen_random_uuid() primary key,
-  produto_id uuid references public.produtos(id) on delete cascade,
-  user_id uuid references auth.users on delete set null,
-  email text,
-  estrelas int check (estrelas between 1 and 5),
-  comentario text,
-  verificado boolean default false,
-  criado_em timestamptz default now()
+-- ── PAGAMENTOS ───────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS pagamentos (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  lojista_id      UUID NOT NULL REFERENCES lojistas(id) ON DELETE CASCADE,
+  plano_id        TEXT NOT NULL REFERENCES planos(id),
+  valor_ton       NUMERIC(14,8) NOT NULL,
+  currency        TEXT NOT NULL DEFAULT 'TONCOIN',
+  invoice_id      TEXT NOT NULL UNIQUE,
+  invoice_link    TEXT,
+  status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','confirmed','expired','failed')),
+  ref_afiliado    TEXT,
+  confirmado_em   TIMESTAMPTZ,
+  criado_em       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Cliques nos produtos (analytics)
-create table if not exists public.produto_cliques (
-  id uuid default gen_random_uuid() primary key,
-  produto_id uuid references public.produtos(id) on delete cascade,
-  lojista_id uuid references public.lojistas(id) on delete cascade,
-  ip text,
-  user_agent text,
-  criado_em timestamptz default now()
+-- ── AFILIADOS ────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS afiliados (
+  id                 UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id            UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  email              TEXT NOT NULL,
+  nome               TEXT,
+  codigo             TEXT NOT NULL UNIQUE,
+  carteira_ton       TEXT,
+  ativo              BOOLEAN NOT NULL DEFAULT TRUE,
+  total_cliques      INT NOT NULL DEFAULT 0,
+  total_conversoes   INT NOT NULL DEFAULT 0,
+  saldo_disponivel   NUMERIC(14,8) NOT NULL DEFAULT 0,
+  saldo_pago         NUMERIC(14,8) NOT NULL DEFAULT 0,
+  criado_em          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_em     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Pagamentos de planos (TON Connect)
-create table if not exists public.pagamentos (
-  id uuid default gen_random_uuid() primary key,
-  lojista_id uuid references public.lojistas(id) on delete cascade,
-  plano_id text references public.planos(id),
-  valor_ton numeric(18,8) not null,
-  currency text default 'TONCOIN',
-  invoice_id text unique,
-  invoice_link text,
-  tx_hash text,
-  status text default 'pending' check (status in ('pending','confirmed','failed')),
-  ref_afiliado text,
-  criado_em timestamptz default now(),
-  confirmado_em timestamptz
+-- ── AFILIADO CLIQUES ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS afiliado_cliques (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  afiliado_id  UUID NOT NULL REFERENCES afiliados(id) ON DELETE CASCADE,
+  ip           TEXT,
+  user_agent   TEXT,
+  criado_em    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Afiliados
-create table if not exists public.afiliados (
-  id uuid default gen_random_uuid() primary key,
-  user_id uuid references auth.users on delete cascade unique,
-  email text not null,
-  nome text,
-  codigo text unique not null,
-  carteira_ton text,
-  destino text,
-  ativo boolean default true,
-  total_cliques int default 0,
-  total_conversoes int default 0,
-  saldo_disponivel numeric(18,8) default 0,
-  saldo_pago numeric(18,8) default 0,
-  criado_em timestamptz default now()
+-- ── AFILIADO COMISSÕES ───────────────────────────────────────
+CREATE TABLE IF NOT EXISTS afiliado_comissoes (
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  afiliado_id    UUID NOT NULL REFERENCES afiliados(id) ON DELETE CASCADE,
+  lojista_id     UUID REFERENCES lojistas(id) ON DELETE SET NULL,
+  plano_id       TEXT REFERENCES planos(id),
+  valor_ton      NUMERIC(14,8) NOT NULL,
+  percentagem    NUMERIC(5,2) NOT NULL DEFAULT 10,
+  referencia_id  TEXT NOT NULL UNIQUE,  -- invoice_id
+  status         TEXT NOT NULL DEFAULT 'disponivel' CHECK (status IN ('disponivel','pago','cancelado')),
+  pago_em        TIMESTAMPTZ,
+  criado_em      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Cliques de afiliados
-create table if not exists public.afiliado_cliques (
-  id uuid default gen_random_uuid() primary key,
-  afiliado_id uuid references public.afiliados(id) on delete cascade,
-  ip text,
-  user_agent text,
-  criado_em timestamptz default now()
+-- ── AFILIADO SAQUES ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS afiliado_saques (
+  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  afiliado_id       UUID NOT NULL REFERENCES afiliados(id) ON DELETE CASCADE,
+  valor_ton         NUMERIC(14,8) NOT NULL,
+  carteira_destino  TEXT NOT NULL,
+  taxa_rede         NUMERIC(14,8) NOT NULL DEFAULT 0.01,
+  valor_liquido     NUMERIC(14,8) NOT NULL,
+  status            TEXT NOT NULL DEFAULT 'processando' CHECK (status IN ('processando','pendente','pago','falhado')),
+  tx_hash           TEXT,
+  processado_em     TIMESTAMPTZ,
+  criado_em         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Comissões de afiliados (10% dos planos)
-create table if not exists public.afiliado_comissoes (
-  id uuid default gen_random_uuid() primary key,
-  afiliado_id uuid references public.afiliados(id) on delete cascade,
-  lojista_id uuid references public.lojistas(id),
-  plano_id text,
-  valor_ton numeric(18,8) not null,
-  percentagem numeric(5,2) default 10,
-  referencia_id text unique,
-  status text default 'disponivel' check (status in ('disponivel','pago','cancelado')),
-  criado_em timestamptz default now(),
-  pago_em timestamptz
+-- ── AUTOMAÇÕES ───────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS automacoes (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  lojista_id   UUID NOT NULL REFERENCES lojistas(id) ON DELETE CASCADE,
+  tipo         TEXT NOT NULL,
+  nome         TEXT NOT NULL,
+  ativa        BOOLEAN NOT NULL DEFAULT FALSE,
+  config       JSONB DEFAULT '{}',
+  criado_em    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (lojista_id, tipo)
 );
 
--- Saques de afiliados
-create table if not exists public.afiliado_saques (
-  id uuid default gen_random_uuid() primary key,
-  afiliado_id uuid references public.afiliados(id) on delete cascade,
-  valor_ton numeric(18,8) not null,
-  carteira_destino text not null,
-  taxa_rede numeric(18,8) default 0.01,
-  valor_liquido numeric(18,8) not null,
-  tx_hash text,
-  status text default 'pendente' check (status in ('pendente','processando','pago','falhado')),
-  criado_em timestamptz default now(),
-  processado_em timestamptz
+-- ── AI CONVERSAS ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS ai_conversas (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id         UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  lojista_id      UUID REFERENCES lojistas(id) ON DELETE CASCADE,
+  contexto        TEXT NOT NULL CHECK (contexto IN ('lojista','afiliado','admin')),
+  mensagens       JSONB NOT NULL DEFAULT '[]',
+  actualizado_em  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, contexto)
 );
 
--- Histórico de chat com Claude AI (por sessão/utilizador)
-create table if not exists public.ai_conversas (
-  id uuid default gen_random_uuid() primary key,
-  user_id uuid references auth.users on delete cascade,
-  lojista_id uuid references public.lojistas(id) on delete cascade,
-  contexto text default 'lojista',
-  mensagens jsonb default '[]',
-  criado_em timestamptz default now(),
-  actualizado_em timestamptz default now()
+-- ── CONFIGURAÇÃO DA PLATAFORMA ───────────────────────────────
+CREATE TABLE IF NOT EXISTS config_plataforma (
+  id                  INT PRIMARY KEY DEFAULT 1,
+  nome_plataforma     TEXT NOT NULL DEFAULT '3DigitalShop',
+  xrocket_api_key     TEXT,
+  gemini_api_key      TEXT,
+  anthropic_api_key   TEXT,
+  ton_usd_rate        NUMERIC(10,4) NOT NULL DEFAULT 5,
+  comissao_afiliado   NUMERIC(5,2) NOT NULL DEFAULT 10,
+  taxa_rede_ton       NUMERIC(14,8) NOT NULL DEFAULT 0.01,
+  dominio_plataforma  TEXT DEFAULT 'https://digimarket-h0vk.onrender.com',
+  actualizado_em      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT config_single_row CHECK (id = 1)
 );
 
--- Automações por loja
-create table if not exists public.automacoes (
-  id uuid default gen_random_uuid() primary key,
-  lojista_id uuid references public.lojistas(id) on delete cascade,
-  tipo text not null,
-  nome text not null,
-  ativa boolean default false,
-  config jsonb default '{}',
-  ultima_execucao timestamptz,
-  criado_em timestamptz default now()
-);
+INSERT INTO config_plataforma (id) VALUES (1)
+ON CONFLICT (id) DO NOTHING;
 
--- Templates de marketing (afiliados VIP)
-create table if not exists public.templates_marketing (
-  id uuid default gen_random_uuid() primary key,
-  tipo text check (tipo in ('banner','post','email','video_script')),
-  nome text,
-  conteudo text,
-  preview_url text,
-  plano_minimo text default 'todos',
-  criado_em timestamptz default now()
-);
+-- ── ÍNDICES ──────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_produtos_lojista   ON produtos(lojista_id);
+CREATE INDEX IF NOT EXISTS idx_pagamentos_lojista ON pagamentos(lojista_id);
+CREATE INDEX IF NOT EXISTS idx_pagamentos_status  ON pagamentos(status);
+CREATE INDEX IF NOT EXISTS idx_afiliados_codigo   ON afiliados(codigo);
+CREATE INDEX IF NOT EXISTS idx_afiliados_user     ON afiliados(user_id);
+CREATE INDEX IF NOT EXISTS idx_comissoes_afiliado ON afiliado_comissoes(afiliado_id);
+CREATE INDEX IF NOT EXISTS idx_saques_afiliado    ON afiliado_saques(afiliado_id);
+CREATE INDEX IF NOT EXISTS idx_cliques_afiliado   ON afiliado_cliques(afiliado_id);
+CREATE INDEX IF NOT EXISTS idx_automacoes_lojista ON automacoes(lojista_id);
 
--- Config da plataforma
-create table if not exists public.config_plataforma (
-  id int primary key default 1,
-  nome_plataforma text default '3DigitalShop',
-  xrocket_api_key text default '2b95ea2ad1f9a2d53563a05d4',
-  ton_usd_rate numeric(10,4) default 5.0,
-  comissao_afiliado numeric(5,2) default 10.0,
-  taxa_rede_ton numeric(10,8) default 0.01,
-  anthropic_api_key text,
-  dominio_plataforma text default 'orlandojaime833-ux.github.io/DIGIMARKET-',
-  backend_url text default 'https://digimarket-h0vk.onrender.com',
-  manutencao boolean default false
-);
+-- ── ROW LEVEL SECURITY ───────────────────────────────────────
+ALTER TABLE lojistas          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE produtos           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pagamentos         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE afiliados          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE afiliado_cliques   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE afiliado_comissoes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE afiliado_saques    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE automacoes         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_conversas       ENABLE ROW LEVEL SECURITY;
 
-insert into public.config_plataforma (id) values (1) on conflict (id) do nothing;
+-- Lojistas: vê e edita apenas o próprio
+CREATE POLICY "lojista_self" ON lojistas
+  FOR ALL USING (auth.uid() = id);
 
--- ════════════════════════════════════════════════════════
--- FUNÇÕES
--- ════════════════════════════════════════════════════════
-create or replace function public.incrementar_cliques(afiliado_id uuid)
-returns void language plpgsql security definer as $$
-begin
-  update public.afiliados set total_cliques = total_cliques + 1 where id = afiliado_id;
-end;$$;
+-- Produtos: CRUD apenas do próprio lojista; leitura pública dos activos
+CREATE POLICY "produto_owner" ON produtos
+  FOR ALL USING (auth.uid() = lojista_id);
+CREATE POLICY "produto_public_read" ON produtos
+  FOR SELECT USING (ativo = TRUE);
 
-create or replace function public.actualizar_media_reviews()
-returns trigger language plpgsql security definer as $$
-begin
-  update public.produtos set
-    media_reviews = (select coalesce(avg(estrelas),0) from public.reviews where produto_id = NEW.produto_id),
-    total_reviews = (select count(*) from public.reviews where produto_id = NEW.produto_id)
-  where id = NEW.produto_id;
-  return NEW;
-end;$$;
+-- Pagamentos: vê apenas os próprios
+CREATE POLICY "pagamento_self" ON pagamentos
+  FOR ALL USING (auth.uid() = lojista_id);
 
-drop trigger if exists trig_reviews on public.reviews;
-create trigger trig_reviews after insert or update or delete on public.reviews
-  for each row execute procedure public.actualizar_media_reviews();
+-- Afiliados: vê e edita apenas o próprio
+CREATE POLICY "afiliado_self" ON afiliados
+  FOR ALL USING (auth.uid() = user_id);
 
-create or replace function public.handle_new_user()
-returns trigger language plpgsql security definer as $$
-begin
-  insert into public.lojistas (id, email, slug)
-  values (new.id, new.email, 'loja-' || substring(new.id::text,1,8))
-  on conflict (id) do nothing;
-  return new;
-end;$$;
+-- Comissões: vê apenas as próprias
+CREATE POLICY "comissao_self" ON afiliado_comissoes
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM afiliados WHERE id = afiliado_id AND user_id = auth.uid())
+  );
 
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created after insert on auth.users
-  for each row execute procedure public.handle_new_user();
+-- Saques: vê apenas os próprios
+CREATE POLICY "saque_self" ON afiliado_saques
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM afiliados WHERE id = afiliado_id AND user_id = auth.uid())
+  );
 
--- ════════════════════════════════════════════════════════
--- RLS
--- ════════════════════════════════════════════════════════
-alter table public.lojistas enable row level security;
-alter table public.produtos enable row level security;
-alter table public.pagamentos enable row level security;
-alter table public.afiliados enable row level security;
-alter table public.afiliado_cliques enable row level security;
-alter table public.afiliado_comissoes enable row level security;
-alter table public.afiliado_saques enable row level security;
-alter table public.ai_conversas enable row level security;
-alter table public.automacoes enable row level security;
-alter table public.reviews enable row level security;
-alter table public.config_plataforma enable row level security;
-alter table public.produto_cliques enable row level security;
-alter table public.planos enable row level security;
+-- Automações: próprio lojista
+CREATE POLICY "automacao_self" ON automacoes
+  FOR ALL USING (auth.uid() = lojista_id);
 
-create policy "planos_publicos" on public.planos for select using (ativo = true);
-create policy "lojista_proprio" on public.lojistas for all using (auth.uid() = id);
-create policy "lojistas_publicas" on public.lojistas for select using (status = 'active');
-create policy "produtos_proprio" on public.produtos for all using (auth.uid() = lojista_id);
-create policy "produtos_publicos" on public.produtos for select using (ativo = true);
-create policy "pagamentos_proprio" on public.pagamentos for all using (auth.uid() = lojista_id);
-create policy "afiliado_proprio" on public.afiliados for all using (auth.uid() = user_id);
-create policy "comissoes_proprio" on public.afiliado_comissoes for select using (afiliado_id in (select id from public.afiliados where user_id = auth.uid()));
-create policy "saques_proprio" on public.afiliado_saques for all using (afiliado_id in (select id from public.afiliados where user_id = auth.uid()));
-create policy "ai_proprio" on public.ai_conversas for all using (auth.uid() = user_id);
-create policy "automacoes_proprio" on public.automacoes for all using (auth.uid() = lojista_id);
-create policy "reviews_publicas" on public.reviews for select using (true);
-create policy "reviews_insert" on public.reviews for insert with check (true);
-create policy "cliques_insert" on public.produto_cliques for insert with check (true);
-create policy "config_service" on public.config_plataforma for all using (false);
-create policy "templates_publicos" on public.templates_marketing for select using (true);
+-- AI conversas: próprio utilizador
+CREATE POLICY "ai_conversa_self" ON ai_conversas
+  FOR ALL USING (auth.uid() = user_id);
+
+-- Planos e config: leitura pública
+CREATE POLICY "planos_public" ON planos FOR SELECT USING (TRUE);
+ALTER TABLE planos         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE config_plataforma ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "config_public_read" ON config_plataforma FOR SELECT USING (TRUE);
+
+-- ── FUNÇÃO: INCREMENTAR CLIQUES AFILIADO ─────────────────────
+CREATE OR REPLACE FUNCTION incrementar_cliques(afiliado_id UUID)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE afiliados
+  SET total_cliques = total_cliques + 1,
+      actualizado_em = NOW()
+  WHERE id = afiliado_id;
+END;
+$$;
+
+-- ── FUNÇÃO: ACTUALIZAR TIMESTAMP ─────────────────────────────
+CREATE OR REPLACE FUNCTION update_actualizado_em()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN NEW.actualizado_em = NOW(); RETURN NEW; END;
+$$;
+
+CREATE TRIGGER trg_lojistas_upd   BEFORE UPDATE ON lojistas   FOR EACH ROW EXECUTE FUNCTION update_actualizado_em();
+CREATE TRIGGER trg_produtos_upd   BEFORE UPDATE ON produtos    FOR EACH ROW EXECUTE FUNCTION update_actualizado_em();
+CREATE TRIGGER trg_afiliados_upd  BEFORE UPDATE ON afiliados   FOR EACH ROW EXECUTE FUNCTION update_actualizado_em();

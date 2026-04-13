@@ -1,134 +1,249 @@
--- ════════════════════════════════════════════════════════
--- DIGIMarket — Sistema de Afiliados
--- Cola no SQL Editor do Supabase e clica "Run"
--- ════════════════════════════════════════════════════════
+-- ============================================================
+-- 3DigitalShop — Afiliados SQL (Supabase SQL Editor)
+-- Execute DEPOIS do 3ds_schema.sql
+-- Contém: políticas avançadas, funções, views e dados de teste
+-- ============================================================
 
--- Tabela principal de afiliados
-create table if not exists public.afiliados (
-  id uuid default gen_random_uuid() primary key,
-  user_id uuid references auth.users on delete cascade,
-  email text not null,
-  nome text,
-  codigo text unique not null,
-  carteira_ton text,
-  destino text default 'https://orlandojaime833-ux.github.io/DIGIMARKET-',
-  ativo boolean default true,
-  total_cliques int default 0,
-  total_conversoes int default 0,
-  saldo_disponivel numeric(18,8) default 0,
-  saldo_pago numeric(18,8) default 0,
-  criado_em timestamptz default now()
-);
+-- ── FUNÇÃO: PROCESSAR COMISSÃO ───────────────────────────────
+-- Chamada internamente pelo backend, mas útil como procedure SQL
+CREATE OR REPLACE FUNCTION processar_comissao_afiliado(
+  p_ref_codigo    TEXT,
+  p_invoice_id    TEXT,
+  p_lojista_id    UUID,
+  p_plano_id      TEXT,
+  p_valor_ton     NUMERIC
+)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_afiliado  afiliados%ROWTYPE;
+  v_comissao  NUMERIC(14,8);
+  v_existe    BOOLEAN;
+BEGIN
+  -- Verificar se afiliado existe e está activo
+  SELECT * INTO v_afiliado
+  FROM afiliados
+  WHERE codigo = p_ref_codigo AND ativo = TRUE;
 
--- Registo de cliques nos links mascarados
-create table if not exists public.afiliado_cliques (
-  id uuid default gen_random_uuid() primary key,
-  afiliado_id uuid references public.afiliados(id) on delete cascade,
-  ip text,
-  user_agent text,
-  referer text,
-  criado_em timestamptz default now()
-);
+  IF NOT FOUND THEN RETURN; END IF;
 
--- Comissões geradas
-create table if not exists public.afiliado_comissoes (
-  id uuid default gen_random_uuid() primary key,
-  afiliado_id uuid references public.afiliados(id) on delete cascade,
-  tipo text not null check (tipo in ('plano','loja')),
-  descricao text,
-  referencia_id text,
-  valor_usd numeric(10,2) default 0,
-  percentagem numeric(5,2) default 20,
-  valor_ton numeric(18,8) not null,
-  currency text default 'TONCOIN',
-  status text default 'pendente' check (status in ('pendente','disponivel','pago','cancelado')),
-  criado_em timestamptz default now(),
-  pago_em timestamptz
-);
+  -- Verificar duplicado
+  SELECT EXISTS(
+    SELECT 1 FROM afiliado_comissoes WHERE referencia_id = p_invoice_id
+  ) INTO v_existe;
 
--- Pedidos de saque
-create table if not exists public.afiliado_saques (
-  id uuid default gen_random_uuid() primary key,
-  afiliado_id uuid references public.afiliados(id) on delete cascade,
-  valor_ton numeric(18,8) not null,
-  carteira_destino text not null,
-  metodo text default 'ton' check (metodo in ('ton','xrocket')),
-  taxa_rede numeric(18,8) default 0.01,
-  valor_liquido numeric(18,8) not null,
-  tx_hash text,
-  status text default 'pendente' check (status in ('pendente','processando','pago','falhado')),
-  criado_em timestamptz default now(),
-  processado_em timestamptz
-);
+  IF v_existe THEN RETURN; END IF;
 
--- Links de afiliado por destino
-create table if not exists public.afiliado_links (
-  id uuid default gen_random_uuid() primary key,
-  afiliado_id uuid references public.afiliados(id) on delete cascade,
-  codigo text not null,
-  destino text not null,
-  destino_tipo text not null,
-  cliques int default 0,
-  criado_em timestamptz default now()
-);
+  -- Calcular comissão (10%)
+  v_comissao := ROUND(p_valor_ton * 0.10, 8);
 
--- Lojas afiliadas (afiliado directo de uma loja)
-create table if not exists public.afiliado_lojas (
-  id uuid default gen_random_uuid() primary key,
-  afiliado_id uuid references public.afiliados(id) on delete cascade,
-  lojista_id uuid references public.lojistas(id) on delete cascade,
-  ativo boolean default true,
-  criado_em timestamptz default now(),
-  unique(afiliado_id, lojista_id)
-);
+  -- Inserir comissão
+  INSERT INTO afiliado_comissoes (
+    afiliado_id, lojista_id, plano_id,
+    valor_ton, percentagem, referencia_id, status
+  ) VALUES (
+    v_afiliado.id, p_lojista_id, p_plano_id,
+    v_comissao, 10, p_invoice_id, 'disponivel'
+  );
 
--- ════════════════════════════════════════════════════════
--- Função: incrementar cliques atomicamente
--- ════════════════════════════════════════════════════════
-create or replace function public.incrementar_cliques(afiliado_id uuid)
-returns void language plpgsql security definer as $$
-begin
-  update public.afiliados
-  set total_cliques = total_cliques + 1
-  where id = afiliado_id;
-end;
+  -- Actualizar saldo e contador
+  UPDATE afiliados SET
+    saldo_disponivel  = ROUND(saldo_disponivel + v_comissao, 8),
+    total_conversoes  = total_conversoes + 1,
+    actualizado_em    = NOW()
+  WHERE id = v_afiliado.id;
+
+END;
 $$;
 
--- ════════════════════════════════════════════════════════
--- RLS
--- ════════════════════════════════════════════════════════
-alter table public.afiliados enable row level security;
-alter table public.afiliado_cliques enable row level security;
-alter table public.afiliado_comissoes enable row level security;
-alter table public.afiliado_saques enable row level security;
-alter table public.afiliado_links enable row level security;
-alter table public.afiliado_lojas enable row level security;
+-- ── FUNÇÃO: EFECTUAR SAQUE (lógica em SQL puro) ──────────────
+CREATE OR REPLACE FUNCTION efectuar_saque_afiliado(
+  p_user_id         UUID,
+  p_carteira_destino TEXT
+)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_afiliado  afiliados%ROWTYPE;
+  v_saldo     NUMERIC(14,8);
+  v_taxa      NUMERIC(14,8) := 0.01;
+  v_liquido   NUMERIC(14,8);
+  v_saque_id  UUID;
+BEGIN
+  SELECT * INTO v_afiliado FROM afiliados WHERE user_id = p_user_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Afiliado não encontrado');
+  END IF;
 
--- Afiliado vê apenas os seus dados
-create policy "afiliado_proprio" on public.afiliados
-  for all using (auth.uid() = user_id);
+  v_saldo := COALESCE(v_afiliado.saldo_disponivel, 0);
 
-create policy "cliques_proprio" on public.afiliado_cliques
-  for select using (
-    afiliado_id in (select id from public.afiliados where user_id = auth.uid())
+  IF v_saldo <= v_taxa THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Saldo insuficiente');
+  END IF;
+
+  IF v_afiliado.total_conversoes = 0 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Precisas de pelo menos 1 conversão para sacar');
+  END IF;
+
+  v_liquido := ROUND(v_saldo - v_taxa, 8);
+
+  INSERT INTO afiliado_saques (
+    afiliado_id, valor_ton, carteira_destino,
+    taxa_rede, valor_liquido, status
+  ) VALUES (
+    v_afiliado.id, v_saldo, p_carteira_destino,
+    v_taxa, v_liquido, 'pendente'
+  ) RETURNING id INTO v_saque_id;
+
+  -- Zerar saldo
+  UPDATE afiliados SET
+    saldo_disponivel = 0,
+    saldo_pago       = ROUND(saldo_pago + v_saldo, 8),
+    actualizado_em   = NOW()
+  WHERE id = v_afiliado.id;
+
+  -- Marcar comissões como pagas
+  UPDATE afiliado_comissoes SET
+    status  = 'pago',
+    pago_em = NOW()
+  WHERE afiliado_id = v_afiliado.id AND status = 'disponivel';
+
+  RETURN jsonb_build_object(
+    'success',    true,
+    'saque_id',   v_saque_id,
+    'valor_ton',  v_saldo,
+    'valor_liquido', v_liquido
+  );
+END;
+$$;
+
+-- ── VIEW: RANKING DE AFILIADOS ────────────────────────────────
+CREATE OR REPLACE VIEW v_ranking_afiliados AS
+SELECT
+  a.id,
+  a.nome,
+  a.codigo,
+  a.total_cliques,
+  a.total_conversoes,
+  ROUND(a.saldo_disponivel, 4)  AS saldo_disponivel,
+  ROUND(a.saldo_pago, 4)        AS saldo_pago,
+  ROUND(a.saldo_disponivel + a.saldo_pago, 4) AS total_ganho,
+  CASE
+    WHEN a.total_cliques = 0 THEN 0
+    ELSE ROUND((a.total_conversoes::NUMERIC / a.total_cliques) * 100, 2)
+  END AS taxa_conversao_pct,
+  a.ativo,
+  a.criado_em
+FROM afiliados a
+ORDER BY total_ganho DESC;
+
+-- ── VIEW: RESUMO DE SAQUES ───────────────────────────────────
+CREATE OR REPLACE VIEW v_saques_resumo AS
+SELECT
+  s.*,
+  a.email       AS afiliado_email,
+  a.codigo      AS afiliado_codigo,
+  a.nome        AS afiliado_nome
+FROM afiliado_saques s
+JOIN afiliados a ON a.id = s.afiliado_id
+ORDER BY s.criado_em DESC;
+
+-- ── VIEW: COMISSÕES DETALHADAS ───────────────────────────────
+CREATE OR REPLACE VIEW v_comissoes_detalhadas AS
+SELECT
+  c.*,
+  a.email   AS afiliado_email,
+  a.codigo  AS afiliado_codigo,
+  l.email   AS lojista_email,
+  l.nome_loja,
+  p.nome    AS plano_nome
+FROM afiliado_comissoes c
+LEFT JOIN afiliados a  ON a.id  = c.afiliado_id
+LEFT JOIN lojistas  l  ON l.id  = c.lojista_id
+LEFT JOIN planos    p  ON p.id  = c.plano_id
+ORDER BY c.criado_em DESC;
+
+-- ── VIEW: STATS DIÁRIAS DOS CLIQUES ──────────────────────────
+CREATE OR REPLACE VIEW v_cliques_diarios AS
+SELECT
+  DATE(criado_em)  AS dia,
+  COUNT(*)         AS total_cliques,
+  COUNT(DISTINCT ip) AS ips_unicos
+FROM afiliado_cliques
+GROUP BY DATE(criado_em)
+ORDER BY dia DESC;
+
+-- ── FUNÇÃO: STATS DO AFILIADO ────────────────────────────────
+CREATE OR REPLACE FUNCTION get_afiliado_stats(p_user_id UUID)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_afiliado  afiliados%ROWTYPE;
+  v_cliques   INT;
+  v_total_ganho NUMERIC;
+BEGIN
+  SELECT * INTO v_afiliado FROM afiliados WHERE user_id = p_user_id;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+
+  SELECT COUNT(*) INTO v_cliques
+  FROM afiliado_cliques WHERE afiliado_id = v_afiliado.id;
+
+  SELECT COALESCE(SUM(valor_ton), 0) INTO v_total_ganho
+  FROM afiliado_comissoes WHERE afiliado_id = v_afiliado.id;
+
+  RETURN jsonb_build_object(
+    'id',                v_afiliado.id,
+    'codigo',            v_afiliado.codigo,
+    'nome',              v_afiliado.nome,
+    'cliques',           v_cliques,
+    'conversoes',        v_afiliado.total_conversoes,
+    'saldo_disponivel',  ROUND(v_afiliado.saldo_disponivel, 6),
+    'saldo_pago',        ROUND(v_afiliado.saldo_pago, 6),
+    'total_ganho',       ROUND(v_total_ganho, 6),
+    'taxa_conversao',    CASE WHEN v_cliques = 0 THEN 0
+                              ELSE ROUND((v_afiliado.total_conversoes::NUMERIC / v_cliques) * 100, 2)
+                         END
+  );
+END;
+$$;
+
+-- ── POLÍTICAS RLS ADICIONAIS ─────────────────────────────────
+
+-- Afiliados: inserir próprio registo
+CREATE POLICY "afiliado_insert_self" ON afiliados
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Afiliados: actualizar próprio registo
+CREATE POLICY "afiliado_update_self" ON afiliados
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- Cliques: service role pode inserir (via backend)
+CREATE POLICY "cliques_service_insert" ON afiliado_cliques
+  FOR INSERT WITH CHECK (TRUE);
+
+-- Comissões: service role pode inserir
+CREATE POLICY "comissoes_service_insert" ON afiliado_comissoes
+  FOR INSERT WITH CHECK (TRUE);
+
+-- Saques: afiliado pode inserir o próprio
+CREATE POLICY "saque_insert_self" ON afiliado_saques
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM afiliados WHERE id = afiliado_id AND user_id = auth.uid())
   );
 
-create policy "comissoes_proprio" on public.afiliado_comissoes
-  for select using (
-    afiliado_id in (select id from public.afiliados where user_id = auth.uid())
-  );
+-- ── ÍNDICES ADICIONAIS DE PERFORMANCE ────────────────────────
+CREATE INDEX IF NOT EXISTS idx_cliques_data
+  ON afiliado_cliques(criado_em DESC);
 
-create policy "saques_proprio" on public.afiliado_saques
-  for all using (
-    afiliado_id in (select id from public.afiliados where user_id = auth.uid())
-  );
+CREATE INDEX IF NOT EXISTS idx_comissoes_status
+  ON afiliado_comissoes(status);
 
-create policy "links_proprio" on public.afiliado_links
-  for all using (
-    afiliado_id in (select id from public.afiliados where user_id = auth.uid())
-  );
+CREATE INDEX IF NOT EXISTS idx_comissoes_referencia
+  ON afiliado_comissoes(referencia_id);
 
-create policy "lojas_proprio" on public.afiliado_lojas
-  for select using (
-    afiliado_id in (select id from public.afiliados where user_id = auth.uid())
-  );
+CREATE INDEX IF NOT EXISTS idx_saques_status
+  ON afiliado_saques(status);
+
+-- ── GRANT para anon/service ───────────────────────────────────
+GRANT SELECT ON v_ranking_afiliados   TO anon, authenticated;
+GRANT SELECT ON v_saques_resumo       TO authenticated;
+GRANT SELECT ON v_comissoes_detalhadas TO authenticated;
+GRANT EXECUTE ON FUNCTION incrementar_cliques(UUID) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION get_afiliado_stats(UUID)  TO authenticated;
